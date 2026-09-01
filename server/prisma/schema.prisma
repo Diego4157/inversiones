@@ -1,0 +1,194 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  COLLECTOR
+}
+
+enum LoanStatus {
+  ACTIVE
+  MORA
+  CASTIGADO
+  RECOVERY
+  PAID
+  CONGELADO
+  FINALIZADO
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
+  passwordHash  String
+  role          Role      @default(COLLECTOR)
+  payments      Payment[]
+  createdAt     DateTime  @default(now())
+}
+
+model Client {
+  id           Int      @id @default(autoincrement())
+  fullName     String
+  documentId   String   @unique
+  phone        String?
+  address      String?
+  routeZone    String?
+  latitude     Decimal? @db.Decimal(10, 7)
+  longitude    Decimal? @db.Decimal(10, 7)
+  status       String   @default("ACTIVE")
+  loans        Loan[]
+  createdAt    DateTime @default(now())
+}
+
+model Loan {
+  id                Int                @id @default(autoincrement())
+  clientId          Int
+  client            Client             @relation(fields: [clientId], references: [id])
+  totalAmount       Decimal            @db.Decimal(12, 2)
+  capitalAmount     Decimal            @db.Decimal(12, 2)
+  interestRate      Decimal            @db.Decimal(5, 2)
+  balance           Decimal            @db.Decimal(12, 2)
+  installmentsTotal Int
+  installmentsPaid  Int                @default(0)
+  frequency         String             @default("DAILY") // DAILY, WEEKLY, BIWEEKLY
+  atrasosAcumulados Int                @default(0)
+  status            LoanStatus         @default(ACTIVE)
+  startDate         DateTime?          @default(now())
+  endDate           DateTime?
+  payments          Payment[]
+  paymentPromises   PaymentPromise[]
+  scheduledReceipts ScheduledReceipt[]
+  refinanceHistory  RefinanceHistory[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model RefinanceHistory {
+  id              Int      @id @default(autoincrement())
+  loanId          Int
+  loan            Loan     @relation(fields: [loanId], references: [id])
+  previousBalance Decimal  @db.Decimal(12, 2)
+  addedCapital    Decimal  @db.Decimal(12, 2)
+  newBalance      Decimal  @db.Decimal(12, 2)
+  refinancedAt    DateTime @default(now())
+}
+
+model Payment {
+  id              Int      @id @default(autoincrement())
+  loanId          Int
+  loan            Loan     @relation(fields: [loanId], references: [id])
+  collectorId     Int
+  collector       User     @relation(fields: [collectorId], references: [id])
+  amount          Decimal  @db.Decimal(12, 2)
+  paymentMethod   String   @default("EFECTIVO") // EFECTIVO, NEQUI, DAVIPLATA, MIXTO
+  cashAmount      Decimal? @db.Decimal(12, 2)
+  digitalAmount   Decimal? @db.Decimal(12, 2)
+  previousBalance Decimal  @db.Decimal(12, 2)
+  newBalance      Decimal  @db.Decimal(12, 2)
+  arrearsCount    Int      @default(0)
+  paymentDate     DateTime @default(now())
+}
+
+model PaymentPromise {
+  id             Int      @id @default(autoincrement())
+  loanId         Int
+  loan           Loan     @relation(fields: [loanId], references: [id])
+  promiseDate    DateTime @db.Date
+  amountExpected Decimal  @db.Decimal(12, 2)
+  status         String   @default("PENDING") // PENDING, FULFILLED, BROKEN
+  createdAt      DateTime @default(now())
+}
+
+model Investor {
+  id               Int                   @id @default(autoincrement())
+  fullName         String
+  totalCapital     Decimal               @default(0) @db.Decimal(15, 2)
+  profitRate       Decimal               @default(0) @db.Decimal(5, 2)
+  paymentFrequency String                @default("MONTHLY")
+  nextPayoutDate   DateTime?
+  transactions     InvestorTransaction[]
+  createdAt        DateTime              @default(now())
+}
+
+model InvestorTransaction {
+  id              Int      @id @default(autoincrement())
+  investorId      Int
+  investor        Investor @relation(fields: [investorId], references: [id])
+  amount          Decimal  @db.Decimal(15, 2)
+  type            String // CONTRIBUTION, WITHDRAWAL, PROFIT_SHARE
+  transactionDate DateTime @default(now())
+}
+
+model Asset {
+  id               Int            @id @default(autoincrement())
+  name             String
+  plate            String?        @unique
+  purchasePrice    Decimal?       @db.Decimal(12, 2)
+  dailyRentTarget  Decimal        @default(35000) @db.Decimal(10, 2)
+  revenues         AssetRevenue[]
+  drawers          SavingsDrawer[]
+  createdAt        DateTime       @default(now())
+}
+
+model AssetRevenue {
+  id             Int      @id @default(autoincrement())
+  assetId        Int
+  asset          Asset    @relation(fields: [assetId], references: [id])
+  amountReceived Decimal  @db.Decimal(12, 2)
+  revenueDate    DateTime @default(now())
+}
+
+model SavingsDrawer {
+  id           Int                 @id @default(autoincrement())
+  assetId      Int
+  asset        Asset               @relation(fields: [assetId], references: [id])
+  type         String // DEBT, SOAT_TECNO, MAINTENANCE, CONTINGENCY, PROFIT
+  balance      Decimal             @default(0) @db.Decimal(12, 2)
+  transactions DrawerTransaction[]
+  lastUpdated  DateTime            @default(now())
+}
+
+model DrawerTransaction {
+  id              Int           @id @default(autoincrement())
+  drawerId        Int
+  drawer          SavingsDrawer @relation(fields: [drawerId], references: [id])
+  amount          Decimal       @db.Decimal(12, 2)
+  description     String?
+  transactionDate DateTime      @default(now())
+}
+
+model ScheduledReceipt {
+  id              Int        @id @default(autoincrement())
+  loanId          Int
+  loan            Loan       @relation(fields: [loanId], references: [id])
+  date            DateTime   @db.Date
+  status          String     @default("PENDING") // PENDING, PAID, ATRASADO, DOMINICAL
+  expectedAmount  Decimal    @db.Decimal(12, 2)
+  isManual        Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+}
+
+model SystemSetting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model LoanModality {
+  id           Int      @id @default(autoincrement())
+  name         String
+  frequency    String   // DAILY, WEEKLY, BIWEEKLY
+  interestRate Decimal  @db.Decimal(5, 2)
+  installments Int
+  createdAt    DateTime @default(now())
+}
+

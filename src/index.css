@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+/* Simplificamos al máximo para asegurar que funcione */
+@layer base {
+  body {
+    background-color: #0f172a; /* Slate 900 */
+    color: #f8fafc; /* Slate 50 */
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background-color: #1e293b; /* Slate 800 */
+    border: 1px solid #334155;
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  }
+
+  .btn-primary {
+    background-color: #10b981; /* Emerald 500 */
+    color: white;
+    font-weight: bold;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+  .btn-primary:hover {
+    background-color: #059669;
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    background-color: #334155; /* Slate 700 */
+    color: white;
+    font-weight: bold;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    cursor: pointer;
+    border: 1px solid #475569;
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+  }
+}
+
+/* Forzamos que los botones siempre muestren la mano del cursor */
+button {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+/* Evitamos que capas invisibles bloqueen el contenido */
+main {
+  position: relative;
+  z-index: 10;
+}
