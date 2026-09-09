@@ -30,7 +30,13 @@ export const authService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(credentials)
     });
-    const data = await res.json();
+    let data: any = {};
+    const text = await res.text();
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error('El servidor se está sincronizando con la base de datos. Por favor recarga la página e intenta de nuevo.');
+    }
     if (!res.ok) {
       throw new Error(data.error || 'Credenciales inválidas');
     }
