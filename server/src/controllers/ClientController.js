@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { recordAuditLog } = require('../utils/auditLogger');
 const prisma = new PrismaClient();
 
 const ClientController = {
@@ -100,6 +101,24 @@ const ClientController = {
         });
       }
 
+      if (status) {
+        let action = 'ACTUALIZAR_CLIENTE';
+        if (status === 'CONGELADO') action = 'CONGELAR_CLIENTE';
+        else if (status === 'CASTIGADO') action = 'CASTIGAR_CLIENTE';
+        else if (status === 'ACTIVE') action = 'REACTIVAR_CLIENTE';
+
+        await recordAuditLog({
+          userId: req.user?.id,
+          action,
+          details: {
+            clientId: client.id,
+            clientName: client.fullName,
+            newStatus: status
+          },
+          req
+        });
+      }
+
       res.json(client);
     } catch (error) {
       console.error("Error updating client:", error);
@@ -131,6 +150,22 @@ const ClientController = {
           data: { status: 'ACTIVE' }
         });
       }
+
+      let action = 'ACTUALIZAR_CLIENTE';
+      if (status === 'CONGELADO') action = 'CONGELAR_CLIENTE';
+      else if (status === 'CASTIGADO') action = 'CASTIGAR_CLIENTE';
+      else if (status === 'ACTIVE') action = 'REACTIVAR_CLIENTE';
+
+      await recordAuditLog({
+        userId: req.user?.id,
+        action,
+        details: {
+          clientId: client.id,
+          clientName: client.fullName,
+          newStatus: status
+        },
+        req
+      });
 
       res.json({ message: `Estado actualizado a ${status}`, client });
     } catch (error) {

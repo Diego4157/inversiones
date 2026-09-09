@@ -223,15 +223,24 @@ export const receiptService = {
     });
     return await res.json();
   },
-  async closeRoute(date: string) {
+  async closeRoute(payload: string | { date: string; operationalExpenses?: number; expensesDescription?: string; notes?: string }) {
+    const body = typeof payload === 'string' ? { date: payload } : payload;
     const res = await fetch(`${API_URL}/receipts/close`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ date }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.error || 'Error al cerrar la ruta');
+    }
+    return await res.json();
+  },
+  async getArqueo(date: string) {
+    const res = await fetch(`${API_URL}/receipts/arqueo?date=${date}`, { headers: getHeaders() });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Error al obtener arqueo');
     }
     return await res.json();
   },
@@ -411,6 +420,20 @@ export const investorService = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Error al aplicar liquidación de inversionistas');
+    }
+    return await res.json();
+  }
+};
+
+export const auditService = {
+  async getLogs(params?: { limit?: number; action?: string }) {
+    const query = new URLSearchParams();
+    if (params?.limit) query.append('limit', params.limit.toString());
+    if (params?.action && params.action !== 'ALL') query.append('action', params.action);
+    const res = await fetch(`${API_URL}/audit-logs?${query.toString()}`, { headers: getHeaders() });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Error al cargar bitácora de auditoría');
     }
     return await res.json();
   }

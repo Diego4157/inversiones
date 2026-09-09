@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, PlusCircle, Loader2, DollarSign, Calculator, FileText, CheckCircle2 } from 'lucide-react';
+import { X, PlusCircle, Loader2, DollarSign, Calculator, CheckCircle2 } from 'lucide-react';
 import { loanService } from '../services/api';
 
 interface AddCapitalModalProps {

@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { recordAuditLog } = require('../utils/auditLogger');
 const prisma = new PrismaClient();
 
 const ReceiptController = {
@@ -120,10 +121,23 @@ const ReceiptController = {
     try {
       const receipt = await prisma.scheduledReceipt.findUnique({
         where: { id: parseInt(id) },
-        include: { loan: true }
+        include: { loan: { include: { client: true } } }
       });
 
       if (!receipt) return res.status(404).json({ error: 'Recibo no encontrado' });
+
+      // Bloqueo permanente si la ruta de esta fecha ya fue cerrada
+      const dateString = receipt.date ? receipt.date.toISOString().split('T')[0] : null;
+      if (dateString) {
+        const isClosedSetting = await prisma.systemSetting.findUnique({
+          where: { key: `closed_route_${dateString}` }
+        });
+        if (isClosedSetting && isClosedSetting.value === 'true') {
+          return res.status(403).json({ 
+            error: `Operación bloqueada (403). La ruta del día ${dateString} ya está cerrada y arqueada permanentemente. No se permiten modificaciones retroactivas.` 
+          });
+        }
+      }
 
       let newBalance = Number(receipt.loan.balance);
       let atrasos = receipt.loan.atrasosAcumulados;
@@ -136,21 +150,55 @@ const ReceiptController = {
         const paidCount = Math.max(1, Math.round(amountToDeduct / cuotaVal));
         installmentsPaid += paidCount;
         
+        const pMethod = paymentMethod || 'EFECTIVO';
+        const cAmount = cashAmount !== undefined && cashAmount !== null 
+          ? Number(cashAmount) 
+          : (pMethod === 'EFECTIVO' ? amountToDeduct : 0);
+        const dAmount = digitalAmount !== undefined && digitalAmount !== null 
+          ? Number(digitalAmount) 
+          : (['NEQUI', 'DAVIPLATA', 'TRANSFERENCIA'].includes(pMethod) ? amountToDeduct : 0);
+
+        // Mantener la marca de tiempo vinculada a la fecha de la ruta
+        const paymentTimestamp = new Date(receipt.date);
+        const now = new Date();
+        paymentTimestamp.setUTCHours(now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds());
+
         // Registrar el pago en la tabla Payment para el cuadre
-        await prisma.payment.create({
+        const createdPayment = await prisma.payment.create({
           data: {
             loanId: receipt.loan.id,
-            collectorId: 1, // HARDCODED for now
+            collectorId: req.user?.id || 1,
             amount: amountToDeduct,
-            paymentMethod: paymentMethod || 'EFECTIVO',
-            cashAmount: cashAmount ? Number(cashAmount) : null,
-            digitalAmount: digitalAmount ? Number(digitalAmount) : null,
+            paymentMethod: pMethod,
+            cashAmount: cAmount,
+            digitalAmount: dAmount,
             previousBalance: Number(receipt.loan.balance),
             newBalance: newBalance,
-            arrearsCount: atrasos
+            arrearsCount: atrasos,
+            paymentDate: paymentTimestamp
           }
         });
 
+        // Registrar Bitácora de Auditoría
+        await recordAuditLog({
+          userId: req.user?.id,
+          action: 'ABONO_PAGO',
+          details: {
+            receiptId: receipt.id,
+            paymentId: createdPayment.id,
+            loanId: receipt.loan.id,
+            clientId: receipt.loan.clientId,
+            clientName: receipt.loan.client?.fullName,
+            amountPaid: amountToDeduct,
+            paymentMethod: pMethod,
+            cashAmount: cAmount,
+            digitalAmount: dAmount,
+            previousBalance: Number(receipt.loan.balance),
+            newBalance: newBalance,
+            routeDate: dateString
+          },
+          req
+        });
       } else if (status === 'ATRASADO') {
         atrasos += 1;
         if (atrasos >= 3) {
@@ -273,14 +321,22 @@ const ReceiptController = {
     }
   },
 
-  // Cerrar y cuadrar la ruta de un día
+  // Cerrar y cuadrar la caja/ruta de un día con Arqueo
   async closeRoute(req, res) {
-    const { date } = req.body;
+    const { date, operationalExpenses = 0, expensesDescription = '', notes = '' } = req.body;
     try {
       const parsedDate = new Date(date);
       const dateString = date.split('T')[0];
 
-      // Verificar si hay cobros PENDING para este día
+      // 1. Verificar si ya está cerrada
+      const existingClosed = await prisma.systemSetting.findUnique({
+        where: { key: `closed_route_${dateString}` }
+      });
+      if (existingClosed && existingClosed.value === 'true') {
+        return res.status(400).json({ error: `La ruta del día ${dateString} ya fue cerrada y arqueada previamente.` });
+      }
+
+      // 2. Verificar si hay cobros PENDING para este día
       const pendingCount = await prisma.scheduledReceipt.count({
         where: {
           date: parsedDate,
@@ -289,18 +345,183 @@ const ReceiptController = {
       });
 
       if (pendingCount > 0) {
-        return res.status(400).json({ error: `No se puede cerrar la ruta. Quedan ${pendingCount} cobros pendientes por cuadrar para este día.` });
+        return res.status(400).json({ 
+          error: `No se puede cerrar la caja. Quedan ${pendingCount} cobros pendientes por gestionar para este día. Debes cobrarlos, marcarlos como atrasados o reprogramarlos.` 
+        });
       }
 
-      // Marcar como cerrada usando SystemSetting
-      await prisma.systemSetting.upsert({
-        where: { key: `closed_route_${dateString}` },
-        update: { value: 'true' },
-        create: { key: `closed_route_${dateString}`, value: 'true' }
+      // 3. Calcular desglose de pagos del día (Arqueo)
+      const startOfDay = new Date(`${dateString}T00:00:00.000Z`);
+      const endOfDay = new Date(`${dateString}T23:59:59.999Z`);
+
+      const payments = await prisma.payment.findMany({
+        where: {
+          paymentDate: {
+            gte: startOfDay,
+            lte: endOfDay
+          }
+        },
+        include: {
+          loan: { include: { client: true } },
+          collector: { select: { id: true, name: true, email: true } }
+        }
       });
 
-      res.json({ success: true, message: `La ruta del día ${dateString} ha sido cerrada y cuadrada oficialmente.` });
+      let totalCash = 0;
+      let totalDigital = 0;
+      let totalCollected = 0;
+
+      for (const p of payments) {
+        const amt = Number(p.amount) || 0;
+        totalCollected += amt;
+        if (p.paymentMethod === 'EFECTIVO') {
+          totalCash += Number(p.cashAmount !== null && p.cashAmount !== undefined ? p.cashAmount : amt);
+        } else if (['NEQUI', 'DAVIPLATA', 'TRANSFERENCIA'].includes(p.paymentMethod)) {
+          totalDigital += Number(p.digitalAmount !== null && p.digitalAmount !== undefined ? p.digitalAmount : amt);
+        } else if (p.paymentMethod === 'MIXTO') {
+          totalCash += Number(p.cashAmount || 0);
+          totalDigital += Number(p.digitalAmount || 0);
+        } else {
+          totalCash += amt;
+        }
+      }
+
+      const expenses = parseFloat(operationalExpenses) || 0;
+      const netToDeliver = totalCash - expenses;
+
+      const arqueoData = {
+        date: dateString,
+        closedAt: new Date().toISOString(),
+        closedBy: req.user ? { id: req.user.id, name: req.user.name, email: req.user.email, role: req.user.role } : { id: 1, name: 'Administrador' },
+        totalCollected,
+        totalCash,
+        totalDigital,
+        operationalExpenses: expenses,
+        expensesDescription: expensesDescription || '',
+        netToDeliver,
+        paymentsCount: payments.length,
+        notes: notes || '',
+        isClosed: true
+      };
+
+      // 4. Guardar configuración de cierre y voucher de arqueo
+      await prisma.$transaction([
+        prisma.systemSetting.upsert({
+          where: { key: `closed_route_${dateString}` },
+          update: { value: 'true' },
+          create: { key: `closed_route_${dateString}`, value: 'true' }
+        }),
+        prisma.systemSetting.upsert({
+          where: { key: `closed_route_data_${dateString}` },
+          update: { value: JSON.stringify(arqueoData) },
+          create: { key: `closed_route_data_${dateString}`, value: JSON.stringify(arqueoData) }
+        })
+      ]);
+
+      // 5. Registrar en bitácora de auditoría
+      await recordAuditLog({
+        userId: req.user?.id,
+        action: 'CIERRE_CAJA',
+        details: {
+          date: dateString,
+          totalCollected,
+          totalCash,
+          totalDigital,
+          operationalExpenses: expenses,
+          expensesDescription,
+          netToDeliver,
+          paymentsCount: payments.length,
+          notes
+        },
+        req
+      });
+
+      res.json({
+        success: true,
+        message: `La caja del día ${dateString} ha sido cerrada y cuadrada oficialmente.`,
+        arqueo: arqueoData
+      });
     } catch (error) {
+      console.error("Error al cerrar caja:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Obtener resumen de arqueo (guardado si está cerrada, o en tiempo real si está abierta)
+  async getArqueoSummary(req, res) {
+    const { date } = req.query;
+    if (!date) return res.status(400).json({ error: 'Fecha requerida' });
+
+    try {
+      const dateString = date.split('T')[0];
+
+      // Si ya está cerrada, retornar el arqueo consolidado guardado
+      const savedArqueo = await prisma.systemSetting.findUnique({
+        where: { key: `closed_route_data_${dateString}` }
+      });
+      if (savedArqueo) {
+        try {
+          const parsed = JSON.parse(savedArqueo.value);
+          return res.json({ ...parsed, isClosed: true });
+        } catch (e) {
+          // Si falla parseo, recalcular
+        }
+      }
+
+      // Si no está cerrada o no tiene datos guardados, calcular en tiempo real
+      const startOfDay = new Date(`${dateString}T00:00:00.000Z`);
+      const endOfDay = new Date(`${dateString}T23:59:59.999Z`);
+
+      const payments = await prisma.payment.findMany({
+        where: {
+          paymentDate: {
+            gte: startOfDay,
+            lte: endOfDay
+          }
+        },
+        include: {
+          loan: { include: { client: true } },
+          collector: { select: { id: true, name: true, email: true } }
+        }
+      });
+
+      let totalCash = 0;
+      let totalDigital = 0;
+      let totalCollected = 0;
+
+      for (const p of payments) {
+        const amt = Number(p.amount) || 0;
+        totalCollected += amt;
+        if (p.paymentMethod === 'EFECTIVO') {
+          totalCash += Number(p.cashAmount !== null && p.cashAmount !== undefined ? p.cashAmount : amt);
+        } else if (['NEQUI', 'DAVIPLATA', 'TRANSFERENCIA'].includes(p.paymentMethod)) {
+          totalDigital += Number(p.digitalAmount !== null && p.digitalAmount !== undefined ? p.digitalAmount : amt);
+        } else if (p.paymentMethod === 'MIXTO') {
+          totalCash += Number(p.cashAmount || 0);
+          totalDigital += Number(p.digitalAmount || 0);
+        } else {
+          totalCash += amt;
+        }
+      }
+
+      const isClosedSetting = await prisma.systemSetting.findUnique({
+        where: { key: `closed_route_${dateString}` }
+      });
+      const isClosed = isClosedSetting ? isClosedSetting.value === 'true' : false;
+
+      res.json({
+        date: dateString,
+        totalCollected,
+        totalCash,
+        totalDigital,
+        operationalExpenses: 0,
+        expensesDescription: '',
+        netToDeliver: totalCash,
+        paymentsCount: payments.length,
+        isClosed
+      });
+    } catch (error) {
+      console.error("Error al obtener arqueo:", error);
       res.status(500).json({ error: error.message });
     }
   },

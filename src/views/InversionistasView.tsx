@@ -576,6 +576,8 @@ const InversionistasView: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
       {/* Modal: Liquidación de Rendimientos sobre Recaudo Real */}
       {showSettlementModal && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[100] p-4">

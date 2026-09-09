@@ -11,6 +11,7 @@ const ModalityController = require('../controllers/ModalityController');
 const PaymentPromiseController = require('../controllers/PaymentPromiseController');
 const ClientController = require('../controllers/ClientController');
 const InvestorController = require('../controllers/InvestorController');
+const AuditController = require('../controllers/AuditController');
 const { authenticateToken } = require('../middlewares/authMiddleware');
 
 // Rutas públicas de Autenticación
@@ -54,6 +55,10 @@ router.post('/receipts/manual', ReceiptController.createManualReceipt);
 router.post('/receipts/close', ReceiptController.closeRoute);
 router.get('/receipts/is-closed', ReceiptController.isRouteClosed);
 router.get('/receipts/status-check', ReceiptController.checkRouteStatus);
+router.get('/receipts/arqueo', ReceiptController.getArqueoSummary);
+
+// Rutas de Auditoría
+router.get('/audit-logs', AuditController.getAuditLogs);
 
 // Rutas de Promesas de Pago
 router.post('/promises', PaymentPromiseController.createPromise);

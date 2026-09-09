@@ -39,15 +39,16 @@ enum LoanStatus {
 }
 
 model User {
-  id            Int       @id @default(autoincrement())
-  email         String    @unique
+  id            Int         @id @default(autoincrement())
+  email         String      @unique
   password      String
   name          String
-  role          Role      @default(COBRADOR)
-  username      String?   @unique
+  role          Role        @default(COBRADOR)
+  username      String?     @unique
   passwordHash  String?
   payments      Payment[]
-  createdAt     DateTime  @default(now())
+  auditLogs     AuditLog[]
+  createdAt     DateTime    @default(now())
 }
 
 model Client {
@@ -229,5 +230,15 @@ model LoanModality {
   interestRate Decimal  @db.Decimal(5, 2)
   installments Int
   createdAt    DateTime @default(now())
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String   // CREAR_CREDITO, ABONO_PAGO, AGREGAR_CAPITAL, CONGELAR_CLIENTE, CIERRE_CAJA
+  details   String?  @db.Text
+  ipAddress String?
+  createdAt DateTime @default(now())
 }
 

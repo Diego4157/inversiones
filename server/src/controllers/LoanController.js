@@ -1,7 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
+const { recordAuditLog } = require('../utils/auditLogger');
 const prisma = new PrismaClient();
 
-console.log(">> CONTROLADOR DE PRÉSTAMOS CARGADO (VERSIÓN 3.0 - ADICIÓN DE CAPITAL & REFINANCIACIÓN)");
+console.log(">> CONTROLADOR DE PRÉSTAMOS CARGADO (VERSIÓN 3.1 - AUDITORÍA INTEGRADA)");
 
 const LoanController = {
   // Obtener todos los préstamos
@@ -61,8 +62,25 @@ const LoanController = {
         },
         include: { client: true }
       });
+
+      // Bitácora de Auditoría
+      await recordAuditLog({
+        userId: req.user?.id,
+        action: 'CREAR_CREDITO',
+        details: {
+          loanId: loan.id,
+          clientId: client.id,
+          clientName: client.fullName,
+          capitalAmount: parseFloat(amount),
+          totalAmount: totalAmount,
+          interestRate: rate,
+          installmentsTotal: loan.installmentsTotal,
+          frequency: loan.frequency
+        },
+        req
+      });
       
-      console.log(">> ¡ÉXITO! Préstamo guardado correctamente en la base de datos.");
+      console.log(">> ¡ÉXITO! Préstamo guardado y auditado correctamente.");
       res.status(201).json(loan);
     } catch (error) {
       console.error("!! ERROR FATAL AL GUARDAR:", error);
@@ -137,6 +155,24 @@ const LoanController = {
           additions: true,
           payments: { orderBy: { paymentDate: 'desc' } }
         }
+      });
+
+      // Bitácora de Auditoría
+      await recordAuditLog({
+        userId: req.user?.id,
+        action: 'AGREGAR_CAPITAL',
+        details: {
+          loanId: updatedLoan.id,
+          clientId: updatedLoan.clientId,
+          clientName: updatedLoan.client?.fullName,
+          addedAmount: additionalCapital,
+          previousBalance: previousBalance,
+          newBalance: newBalance,
+          newInstallments: newInstallments,
+          interestRate: rate,
+          notes: notes || 'Adición de capital sobre saldo vigente'
+        },
+        req
       });
 
       console.log(`>> ¡ÉXITO! Capital adicionado a crédito #${loanId}. Saldo anterior: $${previousBalance} -> Nuevo Saldo: $${newBalance}`);

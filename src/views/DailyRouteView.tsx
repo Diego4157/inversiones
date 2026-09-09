@@ -9,12 +9,12 @@ import {
   Printer, 
   FileText, 
   PauseCircle, 
-  ShieldAlert, 
-  RefreshCw,
-  CheckCircle
+  ShieldAlert
 } from 'lucide-react';
-import { receiptService, reportService, loanService, clientService } from '../services/api';
+import { receiptService, reportService, clientService } from '../services/api';
 import RecordPaymentModal from '../components/RecordPaymentModal';
+import { ArqueoModal } from '../components/ArqueoModal';
+import { enqueueOfflinePayment } from '../utils/offlineQueue';
 import { printHtml } from '../utils/print';
 import { generateReceiptsPDF } from '../lib/pdf';
 import type { ReceiptData } from '../lib/logic';
@@ -28,6 +28,7 @@ const DailyRouteView: React.FC = () => {
   const [activeReceipt, setActiveReceipt] = useState<any | null>(null);
   const [defaultStatus, setDefaultStatus] = useState<string>('PAID');
   const [isClosed, setIsClosed] = useState<boolean>(false);
+  const [showArqueoModal, setShowArqueoModal] = useState<boolean>(false);
   const [statusInfo, setStatusInfo] = useState<any>({
     isClosed: false,
     isGenerated: false,
@@ -101,6 +102,26 @@ const DailyRouteView: React.FC = () => {
     nextPaymentDate: string;
   }) => {
     if (!activeReceipt) return;
+
+    // Comprobación previa de desconexión
+    if (!navigator.onLine) {
+      enqueueOfflinePayment({
+        receiptId: activeReceipt.id,
+        loanId: activeReceipt.loan.id,
+        clientName: activeReceipt.loan?.client?.fullName || 'Cliente',
+        status: paymentData.status,
+        amountPaid: paymentData.amountPaid,
+        paymentMethod: paymentData.paymentMethod,
+        cashAmount: paymentData.cashAmount,
+        digitalAmount: paymentData.digitalAmount,
+        nextPaymentDate: paymentData.nextPaymentDate
+      });
+      setReceipts(prev => prev.map(r => r.id === activeReceipt.id ? { ...r, status: paymentData.status } : r));
+      setActiveReceipt(null);
+      alert('📡 Dispositivo sin conexión. El abono fue guardado en cola local y se sincronizará automáticamente al volver la señal.');
+      return;
+    }
+
     try {
       await receiptService.updateStatus(
         activeReceipt.id,
@@ -113,8 +134,26 @@ const DailyRouteView: React.FC = () => {
       );
       setActiveReceipt(null);
       loadData();
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error("Error al registrar abono:", error);
+      if (!navigator.onLine || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        enqueueOfflinePayment({
+          receiptId: activeReceipt.id,
+          loanId: activeReceipt.loan.id,
+          clientName: activeReceipt.loan?.client?.fullName || 'Cliente',
+          status: paymentData.status,
+          amountPaid: paymentData.amountPaid,
+          paymentMethod: paymentData.paymentMethod,
+          cashAmount: paymentData.cashAmount,
+          digitalAmount: paymentData.digitalAmount,
+          nextPaymentDate: paymentData.nextPaymentDate
+        });
+        setReceipts(prev => prev.map(r => r.id === activeReceipt.id ? { ...r, status: paymentData.status } : r));
+        setActiveReceipt(null);
+        alert('📡 Falla de red temporal. El abono quedó guardado en cola local para sincronizarse en cuanto vuelva la conexión.');
+      } else {
+        alert(error.message || 'Error al procesar el pago');
+      }
     }
   };
 
@@ -129,21 +168,15 @@ const DailyRouteView: React.FC = () => {
     }
   };
 
-  const handleCloseRoute = async () => {
-    if (isClosed) return;
-    const hasPending = activeReceipts.some(r => r.status === 'PENDING');
-    if (hasPending) {
-      alert('No puedes cerrar la ruta porque aún tienes cobros activos PENDIENTES por registrar.');
-      return;
+  const handleOpenArqueoModal = () => {
+    if (!isClosed) {
+      const hasPending = activeReceipts.some(r => r.status === 'PENDING');
+      if (hasPending) {
+        alert('No puedes cerrar la caja porque aún tienes cobros activos PENDIENTES por registrar.');
+        return;
+      }
     }
-    if (!confirm(`¿Seguro que deseas cerrar oficialmente la ruta del día ${selectedDate}?`)) return;
-    try {
-      await receiptService.closeRoute(selectedDate);
-      alert('Ruta cerrada y cuadrada exitosamente.');
-      loadData();
-    } catch (err: any) {
-      alert(err.message || 'Error al cerrar la ruta');
-    }
+    setShowArqueoModal(true);
   };
 
   // Descarga de comprobantes en PDF a dos columnas
@@ -535,24 +568,31 @@ const DailyRouteView: React.FC = () => {
             </div>
             
             <button 
-              onClick={handleCloseRoute}
-              disabled={isClosed}
-              className={`w-full mt-6 py-4 font-bold rounded-2xl shadow-lg transition-all cursor-pointer ${
+              onClick={handleOpenArqueoModal}
+              className={`w-full mt-6 py-4 font-bold rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 isClosed 
-                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 cursor-not-allowed' 
-                  : 'bg-blue-600 hover:bg-blue-500 text-white'
+                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30' 
+                  : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black'
               }`}
             >
-              {isClosed ? 'Ruta Cerrada y Cuadrada' : 'Cerrar Ruta Oficial'}
+              {isClosed ? 'Ver Arqueo y Voucher Oficial' : 'Cerrar Caja del Día y Arquear'}
             </button>
 
             {isClosed && (
-              <button 
-                onClick={handlePrintDailySummary}
-                className="w-full mt-3 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer animate-in fade-in"
-              >
-                <Printer className="w-4 h-4" /> Imprimir Cuadre Diario (Ticket)
-              </button>
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <button 
+                  onClick={handleOpenArqueoModal}
+                  className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <Printer className="w-3.5 h-3.5 text-emerald-400" /> Voucher PDF
+                </button>
+                <button 
+                  onClick={handlePrintDailySummary}
+                  className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <Printer className="w-3.5 h-3.5 text-blue-400" /> Tirilla Térmica
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -564,6 +604,18 @@ const DailyRouteView: React.FC = () => {
           initialStatus={defaultStatus}
           onClose={() => setActiveReceipt(null)}
           onConfirm={handlePaymentConfirm}
+        />
+      )}
+
+      {showArqueoModal && (
+        <ArqueoModal
+          date={selectedDate}
+          isClosed={isClosed}
+          onClose={() => setShowArqueoModal(false)}
+          onClosedSuccess={() => {
+            setShowArqueoModal(false);
+            loadData();
+          }}
         />
       )}
     </div>

@@ -7,6 +7,8 @@ import DailyRouteView from './views/DailyRouteView';
 import ModalitiesView from './views/ModalitiesView';
 import AssetsView from './views/AssetsView';
 import InversionistasView from './views/InversionistasView';
+import { AuditLogsView } from './views/AuditLogsView';
+import { OfflineSyncBadge } from './components/OfflineSyncBadge';
 import { authService, loanService, modalityService, clientService, assetService, investorService } from './services/api';
 import LoginView from './views/LoginView';
 import { 
@@ -17,7 +19,9 @@ import {
   TrendingUp,
   Loader2,
   AlertCircle,
-  LogOut
+  LogOut,
+  Map,
+  ShieldCheck
 } from 'lucide-react';
 import EditClientModal from './components/EditClientModal';
 
@@ -210,6 +214,7 @@ const App: React.FC = () => {
     if (activeTab === 'modalidades') return <ModalitiesView />;
     if (activeTab === 'activos') return <AssetsView />;
     if (activeTab === 'inversionistas') return <InversionistasView />;
+    if (activeTab === 'auditoria') return <AuditLogsView />;
     return (
       <DashboardView 
         onNewClick={() => setShowAddModal(true)} 
@@ -274,6 +279,7 @@ const App: React.FC = () => {
               { id: 'modalidades', label: 'Modalidades de Cobro' },
               { id: 'activos', label: 'Mis Activos' },
               { id: 'inversionistas', label: 'Inversionistas / Socios' },
+              { id: 'auditoria', label: 'Auditoría del Sistema' },
             ].map(item => (
               <button
                 key={item.id}
@@ -317,12 +323,39 @@ const App: React.FC = () => {
       </div>
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <header className="lg:hidden h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 z-50">
-          <div className="flex items-center space-x-2">
-            <TrendingUp className="text-emerald-400 w-6 h-6" />
-            <span className="font-bold text-white tracking-tighter">JD Inv</span>
+        {/* Header Superior Universal con Sincronización Offline */}
+        <header className="h-16 bg-slate-900/90 backdrop-blur border-b border-slate-800 flex items-center justify-between px-4 md:px-8 z-40 shrink-0">
+          <div className="flex items-center space-x-3">
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+              className="lg:hidden p-2 text-slate-300 hover:text-white bg-slate-800 rounded-xl cursor-pointer"
+              aria-label="Abrir menú"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center space-x-2 lg:hidden">
+              <TrendingUp className="text-emerald-400 w-6 h-6" />
+              <span className="font-bold text-white tracking-tighter">JD Inv</span>
+            </div>
+            <div className="hidden lg:flex items-center space-x-2 text-xs">
+              <span className="text-slate-500 font-medium">JD Inversiones</span>
+              <span className="text-slate-600">/</span>
+              <span className="text-white font-bold">
+                {activeTab === 'dashboard' && 'Resumen Ejecutivo'}
+                {activeTab === 'clientes' && 'Gestión de Clientes'}
+                {activeTab === 'ruta' && 'Ruta Diaria & Arqueo'}
+                {activeTab === 'almanaque' && 'Almanaque y Cobros'}
+                {activeTab === 'modalidades' && 'Modalidades de Préstamos'}
+                {activeTab === 'inversionistas' && 'Socios e Inversionistas'}
+                {activeTab === 'activos' && 'Parque de Activos'}
+                {activeTab === 'auditoria' && 'Bitácora de Auditoría'}
+              </span>
+            </div>
           </div>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-300"><Menu /></button>
+
+          <div className="flex items-center space-x-3">
+            <OfflineSyncBadge onSyncComplete={loadData} />
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8 relative z-10">
@@ -343,7 +376,9 @@ const App: React.FC = () => {
 
         <nav className="lg:hidden h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-around z-40">
           <button onClick={() => setActiveTab('dashboard')} className={`p-3 ${activeTab === 'dashboard' ? 'text-emerald-400' : 'text-slate-500'}`}><LayoutDashboard /></button>
+          <button onClick={() => setActiveTab('ruta')} className={`p-3 ${activeTab === 'ruta' ? 'text-emerald-400' : 'text-slate-500'}`}><Map /></button>
           <button onClick={() => setActiveTab('clientes')} className={`p-3 ${activeTab === 'clientes' ? 'text-emerald-400' : 'text-slate-500'}`}><Users /></button>
+          <button onClick={() => setActiveTab('auditoria')} className={`p-3 ${activeTab === 'auditoria' ? 'text-emerald-400' : 'text-slate-500'}`}><ShieldCheck /></button>
         </nav>
       </div>
 

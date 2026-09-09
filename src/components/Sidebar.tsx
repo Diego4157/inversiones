@@ -4,7 +4,6 @@ import {
   Users, 
   TrendingUp, 
   Bike, 
-  Settings, 
   LogOut, 
   Calendar, 
   Map, 
@@ -30,6 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user, onLogo
     { id: 'modalidades', label: 'Modalidades', icon: ClipboardList },
     { id: 'inversionistas', label: 'Inversionistas', icon: TrendingUp },
     { id: 'activos', label: 'Mis Activos', icon: Bike },
+    { id: 'auditoria', label: 'Auditoría', icon: ShieldCheck },
   ];
 
   const handleLogout = () => {

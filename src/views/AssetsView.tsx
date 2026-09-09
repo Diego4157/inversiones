@@ -9,12 +9,7 @@ import {
   Shield, 
   Wrench, 
   AlertTriangle, 
-  TrendingUp, 
-  Car,
-  Settings,
-  Sliders,
-  CheckCircle2,
-  Clock
+  TrendingUp
 } from 'lucide-react';
 import { assetService } from '../services/api';
 

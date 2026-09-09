@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, DollarSign, CreditCard, Printer } from 'lucide-react';
+import { X, Calendar, DollarSign, CreditCard } from 'lucide-react';
 import { generateSingleDualReceiptPDF } from '../lib/pdf';
 
 interface RecordPaymentModalProps {

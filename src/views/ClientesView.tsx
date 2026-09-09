@@ -9,8 +9,7 @@ import {
   PlusCircle,
   PauseCircle,
   CheckCircle,
-  ShieldAlert,
-  DollarSign
+  ShieldAlert
 } from 'lucide-react';
 import { clientService } from '../services/api';
 import EditClientModal from '../components/EditClientModal';
