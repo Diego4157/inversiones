@@ -7,7 +7,8 @@ import DailyRouteView from './views/DailyRouteView';
 import ModalitiesView from './views/ModalitiesView';
 import AssetsView from './views/AssetsView';
 import InversionistasView from './views/InversionistasView';
-import { loanService, modalityService, clientService, assetService, investorService } from './services/api';
+import { authService, loanService, modalityService, clientService, assetService, investorService } from './services/api';
+import LoginView from './views/LoginView';
 import { 
   Menu, 
   X, 
@@ -15,11 +16,15 @@ import {
   Users,
   TrendingUp,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  LogOut
 } from 'lucide-react';
 import EditClientModal from './components/EditClientModal';
 
 const App: React.FC = () => {
+  const [currentUser, setCurrentUser] = useState<any | null>(() => authService.getUser());
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
@@ -86,7 +91,18 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
+    const verifySession = async () => {
+      const user = await authService.getMe();
+      if (user) {
+        setCurrentUser(user);
+        loadData();
+      } else {
+        setCurrentUser(null);
+      }
+      setIsCheckingAuth(false);
+    };
+
+    verifySession();
   }, []);
 
   const openPayment = (client: any) => {
@@ -214,6 +230,27 @@ const App: React.FC = () => {
   const simTotal = simAmount * (1 + (simRate / 100));
   const simCuota = simTotal / simInstallments;
 
+  // Comprobación de Sesión Activa
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-emerald-500 space-y-3">
+        <Loader2 className="animate-spin w-10 h-10" />
+        <span className="text-xs text-slate-400">Verificando sesión de usuario...</span>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <LoginView
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          loadData();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex overflow-hidden">
       {/* Menu Móvil Overlay */}
@@ -235,7 +272,7 @@ const App: React.FC = () => {
               { id: 'ruta', label: 'Ruta Diaria' },
               { id: 'almanaque', label: 'Almanaque / Calendario' },
               { id: 'modalidades', label: 'Modalidades de Cobro' },
-              { id: 'activos', label: 'Mis Activos (Motos)' },
+              { id: 'activos', label: 'Mis Activos' },
               { id: 'inversionistas', label: 'Inversionistas / Socios' },
             ].map(item => (
               <button
@@ -253,12 +290,30 @@ const App: React.FC = () => {
                 {item.label}
               </button>
             ))}
+            <button
+              onClick={() => {
+                authService.logout();
+                setCurrentUser(null);
+              }}
+              className="py-4 px-6 rounded-2xl text-lg font-bold text-red-400 hover:bg-red-500/10 text-left flex items-center space-x-2 mt-4"
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Cerrar Sesión</span>
+            </button>
           </nav>
         </div>
       )}
 
       <div className="hidden lg:block border-r border-slate-800">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Sidebar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          user={currentUser}
+          onLogout={() => {
+            authService.logout();
+            setCurrentUser(null);
+          }}
+        />
       </div>
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">

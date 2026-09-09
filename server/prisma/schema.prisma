@@ -12,7 +12,20 @@ datasource db {
 
 enum Role {
   ADMIN
+  COBRADOR
   COLLECTOR
+}
+
+enum AssetCategory {
+  VEHICULO
+  INMUEBLE
+  OTRO
+}
+
+enum AssetStatus {
+  ACTIVO
+  INACTIVO
+  MANTENIMIENTO
 }
 
 enum LoanStatus {
@@ -27,9 +40,12 @@ enum LoanStatus {
 
 model User {
   id            Int       @id @default(autoincrement())
-  username      String    @unique
-  passwordHash  String
-  role          Role      @default(COLLECTOR)
+  email         String    @unique
+  password      String
+  name          String
+  role          Role      @default(COBRADOR)
+  username      String?   @unique
+  passwordHash  String?
   payments      Payment[]
   createdAt     DateTime  @default(now())
 }
@@ -43,7 +59,7 @@ model Client {
   routeZone    String?
   latitude     Decimal? @db.Decimal(10, 7)
   longitude    Decimal? @db.Decimal(10, 7)
-  status       String   @default("ACTIVE")
+  status       String   @default("ACTIVE") // ACTIVE, CONGELADO, CASTIGADO, INACTIVE
   loans        Loan[]
   createdAt    DateTime @default(now())
 }
@@ -67,8 +83,20 @@ model Loan {
   paymentPromises   PaymentPromise[]
   scheduledReceipts ScheduledReceipt[]
   refinanceHistory  RefinanceHistory[]
+  additions         LoanAddition[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+}
+
+model LoanAddition {
+  id              Int      @id @default(autoincrement())
+  loanId          Int
+  loan            Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  amount          Decimal  @db.Decimal(12, 2)
+  previousBalance Decimal  @db.Decimal(12, 2)
+  newBalance      Decimal  @db.Decimal(12, 2)
+  notes           String?
+  createdAt       DateTime @default(now())
 }
 
 model RefinanceHistory {
@@ -128,14 +156,25 @@ model InvestorTransaction {
 }
 
 model Asset {
-  id               Int            @id @default(autoincrement())
-  name             String
-  plate            String?        @unique
-  purchasePrice    Decimal?       @db.Decimal(12, 2)
-  dailyRentTarget  Decimal        @default(35000) @db.Decimal(10, 2)
-  revenues         AssetRevenue[]
-  drawers          SavingsDrawer[]
-  createdAt        DateTime       @default(now())
+  id                 Int            @id @default(autoincrement())
+  category           AssetCategory  @default(VEHICULO)
+  name               String
+  identifier         String?        // Placa, matrícula inmobiliaria, etc.
+  plate              String?        // Retrocompatibilidad
+  purchasePrice      Decimal?       @db.Decimal(12, 2)
+  dailyTargetIncome  Decimal        @default(35000) @db.Decimal(10, 2)
+  dailyRentTarget    Decimal?       @db.Decimal(10, 2) // Retrocompatibilidad
+  status             AssetStatus    @default(ACTIVO)
+  
+  // Reglas de cajones de ahorro parametrizables por activo
+  debtPercent        Decimal?       @default(51.1) @db.Decimal(5, 2)
+  soatAmount         Decimal?       @default(2000) @db.Decimal(10, 2)
+  maintenanceAmount  Decimal?       @default(3000) @db.Decimal(10, 2)
+  contingencyAmount  Decimal?       @default(5000) @db.Decimal(10, 2)
+
+  revenues           AssetRevenue[]
+  drawers            SavingsDrawer[]
+  createdAt          DateTime       @default(now())
 }
 
 model AssetRevenue {

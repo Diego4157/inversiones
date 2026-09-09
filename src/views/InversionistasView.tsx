@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, UserPlus, DollarSign, ArrowUpRight, ArrowDownRight, Award, Loader2, Calendar, Percent, Edit2 } from 'lucide-react';
+import { 
+  TrendingUp, 
+  UserPlus, 
+  DollarSign, 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  Award, 
+  Loader2, 
+  Calendar, 
+  Percent, 
+  Edit2,
+  Calculator,
+  CheckCircle2
+} from 'lucide-react';
 import { investorService } from '../services/api';
 
 const InversionistasView: React.FC = () => {
@@ -9,6 +22,17 @@ const InversionistasView: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showTxModal, setShowTxModal] = useState(false);
+
+  // Estados para liquidación sobre recaudo real
+  const [showSettlementModal, setShowSettlementModal] = useState(false);
+  const [settlementParams, setSettlementParams] = useState({
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    operationalExpenses: '0'
+  });
+  const [settlementResult, setSettlementResult] = useState<any | null>(null);
+  const [isCalculatingSettlement, setIsCalculatingSettlement] = useState(false);
+  const [isApplyingSettlement, setIsApplyingSettlement] = useState(false);
   
   const [investorForm, setInvestorForm] = useState({
     fullName: '',
@@ -119,6 +143,47 @@ const InversionistasView: React.FC = () => {
     }
   };
 
+  const handleCalculateSettlement = async () => {
+    setIsCalculatingSettlement(true);
+    try {
+      const data = await investorService.calculateSettlement({
+        startDate: settlementParams.startDate,
+        endDate: settlementParams.endDate,
+        operationalExpenses: Number(settlementParams.operationalExpenses)
+      });
+      setSettlementResult(data);
+    } catch (err: any) {
+      alert(err.message || 'Error al calcular liquidación');
+    } finally {
+      setIsCalculatingSettlement(false);
+    }
+  };
+
+  const handleApplySettlement = async () => {
+    if (!settlementResult || !settlementResult.breakdown) return;
+    if (!confirm('¿Deseas asentar oficialmente esta liquidación de utilidades en el historial de los socios?')) return;
+    setIsApplyingSettlement(true);
+    try {
+      await investorService.applySettlement({
+        startDate: settlementParams.startDate,
+        endDate: settlementParams.endDate,
+        operationalExpenses: Number(settlementParams.operationalExpenses),
+        settlements: settlementResult.breakdown.map((item: any) => ({
+          investorId: item.investorId,
+          yieldAmount: item.yieldReal
+        }))
+      });
+      alert('¡Liquidación asentada exitosamente!');
+      setShowSettlementModal(false);
+      setSettlementResult(null);
+      await loadInvestors();
+    } catch (err: any) {
+      alert(err.message || 'Error al asentar liquidación');
+    } finally {
+      setIsApplyingSettlement(false);
+    }
+  };
+
   const openEditModal = () => {
     if (!selectedInvestor) return;
     setEditForm({
@@ -176,14 +241,25 @@ const InversionistasView: React.FC = () => {
           <h1 className="text-3xl font-bold text-white tracking-tight flex items-center">
             <TrendingUp className="mr-3 text-emerald-400" /> Control de Inversionistas
           </h1>
-          <p className="text-slate-400 mt-1">Administra el capital de los socios, márgenes de ganancia asignados y fechas de pago</p>
+          <p className="text-slate-400 mt-1">Administra el capital de los socios, márgenes de ganancia asignados y liquidación sobre recaudo real</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl shadow-lg flex items-center transition-all shrink-0 self-start"
-        >
-          <UserPlus className="w-5 h-5 mr-2" /> Agregar Socio
-        </button>
+        <div className="flex items-center space-x-3 shrink-0 self-start">
+          <button
+            onClick={() => {
+              setShowSettlementModal(true);
+              handleCalculateSettlement();
+            }}
+            className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg flex items-center transition-all cursor-pointer text-sm"
+          >
+            <Calculator className="w-4 h-4 mr-2" /> Liquidar Recaudo Real
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl shadow-lg flex items-center transition-all shrink-0 cursor-pointer text-sm"
+          >
+            <UserPlus className="w-4 h-4 mr-2" /> Agregar Socio
+          </button>
+        </div>
       </div>
 
       {/* Stats Board */}
@@ -498,6 +574,170 @@ const InversionistasView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      {/* Modal: Liquidación de Rendimientos sobre Recaudo Real */}
+      {showSettlementModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl p-6 md:p-8 shadow-2xl overflow-y-auto max-h-[92vh] text-slate-100">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-white flex items-center">
+                  <Calculator className="w-5 h-5 text-blue-400 mr-2" />
+                  Liquidación Mensual sobre Recaudo Real
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Calcula el rendimiento a repartir sobre los pagos efectivamente recaudados (tabla Payment), deduciendo gastos operativos.
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowSettlementModal(false)}
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Filtros de Liquidación */}
+            <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-2xl mb-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Fecha Inicio</label>
+                  <input
+                    type="date"
+                    value={settlementParams.startDate}
+                    onChange={(e) => setSettlementParams({...settlementParams, startDate: e.target.value})}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Fecha Fin</label>
+                  <input
+                    type="date"
+                    value={settlementParams.endDate}
+                    onChange={(e) => setSettlementParams({...settlementParams, endDate: e.target.value})}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Gastos Operativos ($)</label>
+                  <input
+                    type="number"
+                    value={settlementParams.operationalExpenses}
+                    onChange={(e) => setSettlementParams({...settlementParams, operationalExpenses: e.target.value})}
+                    placeholder="0"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCalculateSettlement}
+                disabled={isCalculatingSettlement}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer"
+              >
+                {isCalculatingSettlement ? (
+                  <>
+                    <Loader2 className="animate-spin w-4 h-4" />
+                    <span>Calculando Recaudo Real...</span>
+                  </>
+                ) : (
+                  <>
+                    <Calculator className="w-4 h-4" />
+                    <span>Recalcular Resultados</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Resultados de la Liquidación */}
+            {settlementResult && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl">
+                    <span className="text-[11px] text-slate-400 block">Recaudo Real</span>
+                    <span className="text-lg font-black text-emerald-400">
+                      ${Number(settlementResult.totalCollected || 0).toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-slate-500 block">({settlementResult.paymentsCount} abonos)</span>
+                  </div>
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl">
+                    <span className="text-[11px] text-slate-400 block">Gastos Deducidos</span>
+                    <span className="text-lg font-bold text-red-400">
+                      -${Number(settlementResult.operationalExpenses || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl">
+                    <span className="text-[11px] text-slate-400 block">Utilidad Base Neta</span>
+                    <span className="text-lg font-black text-blue-400">
+                      ${Number(settlementResult.netBase || 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="border border-slate-800 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-xs whitespace-nowrap">
+                    <thead className="bg-slate-950/80 text-slate-400 font-bold uppercase border-b border-slate-800">
+                      <tr>
+                        <th className="px-4 py-3">Socio</th>
+                        <th className="px-4 py-3 text-right">Capital</th>
+                        <th className="px-4 py-3 text-center">% Part.</th>
+                        <th className="px-4 py-3 text-right">Rend. Real</th>
+                        <th className="px-4 py-3 text-right">Rend. Pactado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {settlementResult.breakdown?.map((item: any) => (
+                        <tr key={item.investorId} className="hover:bg-slate-800/30">
+                          <td className="px-4 py-3 font-bold text-white">{item.fullName}</td>
+                          <td className="px-4 py-3 text-right text-slate-300">
+                            ${Number(item.totalCapital).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold text-blue-400">
+                            {item.participationPercentage}%
+                          </td>
+                          <td className="px-4 py-3 text-right font-black text-emerald-400">
+                            ${Number(item.yieldReal).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-right text-slate-400">
+                            ${Number(item.contractualYield).toLocaleString()} ({item.profitRateContractual}%)
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowSettlementModal(false)}
+                    className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplySettlement}
+                    disabled={isApplyingSettlement}
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
+                  >
+                    {isApplyingSettlement ? (
+                      <>
+                        <Loader2 className="animate-spin w-4 h-4" />
+                        <span>Asentando en Historial...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Confirmar y Asentar Liquidación</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

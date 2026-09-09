@@ -23,13 +23,19 @@ const ReportController = {
       });
 
       const receipts = await prisma.scheduledReceipt.findMany({
-        where: { date: parsedDate }
+        where: { date: parsedDate },
+        include: {
+          loan: {
+            include: { client: true }
+          }
+        }
       });
 
       let totalCollected = payments.reduce((acc, p) => acc + Number(p.amount), 0);
       let totalPending = 0;
       let totalAtrasosCount = 0;
       let totalDominicalesCount = 0;
+      let totalFrozenCount = 0;
 
       let totalCash = 0;
       let totalNequi = 0;
@@ -56,6 +62,15 @@ const ReportController = {
       });
 
       receipts.forEach(r => {
+        const clientStatus = r.loan?.client?.status;
+        const loanStatus = r.loan?.status;
+        const isFrozen = clientStatus === 'CONGELADO' || clientStatus === 'CASTIGADO' || loanStatus === 'CONGELADO' || loanStatus === 'CASTIGADO';
+
+        if (isFrozen) {
+          totalFrozenCount++;
+          return; // Excluido del cálculo de caja esperada de la ruta activa
+        }
+
         if (r.status === 'PENDING') {
           totalPending += Number(r.expectedAmount);
         } else if (r.status === 'ATRASADO') {

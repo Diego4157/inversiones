@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, DollarSign, CreditCard } from 'lucide-react';
+import { X, Calendar, DollarSign, CreditCard, Printer } from 'lucide-react';
+import { generateSingleDualReceiptPDF } from '../lib/pdf';
 
 interface RecordPaymentModalProps {
   receipt: any;
@@ -21,6 +22,7 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ receipt, initia
   const [paymentMethod, setPaymentMethod] = useState<string>('EFECTIVO');
   const [cashAmount, setCashAmount] = useState<string>('');
   const [digitalAmount, setDigitalAmount] = useState<string>('');
+  const [generatePdf, setGeneratePdf] = useState<boolean>(true);
   
   // Calculate next default date
   const getDefaultNextDate = () => {
@@ -61,6 +63,29 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ receipt, initia
       if (totalMix !== amountPaid) {
         alert(`La suma de Efectivo ($${finalCash || 0}) y Digital ($${finalDigital || 0}) debe ser igual al Total Pagado ($${amountPaid})`);
         return;
+      }
+    }
+
+    if (status === 'PAID' && generatePdf) {
+      try {
+        const totalInstallments = receipt.loan?.installmentsTotal || 20;
+        const paidInstallments = receipt.loan?.installmentsPaid || 0;
+        const remaining = Math.max(0, totalInstallments - paidInstallments - numInstallments);
+
+        generateSingleDualReceiptPDF({
+          clientName: receipt.loan?.client?.fullName || 'Cliente',
+          documentId: receipt.loan?.client?.documentId,
+          previousBalance: Number(receipt.loan?.balance || 0),
+          paymentAmount: amountPaid,
+          newBalance: Math.max(0, Number(receipt.loan?.balance || 0) - amountPaid),
+          remainingInstallments: remaining,
+          arrears: receipt.loan?.atrasosAcumulados || 0,
+          date: new Date().toISOString().split('T')[0],
+          paymentMethod: paymentMethod,
+          receiptNumber: receipt.id
+        });
+      } catch (pdfErr) {
+        console.error('Error generando PDF:', pdfErr);
       }
     }
 
@@ -218,9 +243,24 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ receipt, initia
             />
           </div>
 
+          {status === 'PAID' && (
+            <div className="flex items-center space-x-2 pt-1 pb-1">
+              <input
+                type="checkbox"
+                id="printDualPdf"
+                checked={generatePdf}
+                onChange={(e) => setGeneratePdf(e.target.checked)}
+                className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-400 border-slate-700 bg-slate-950 cursor-pointer"
+              />
+              <label htmlFor="printDualPdf" className="text-xs text-slate-300 cursor-pointer select-none">
+                Descargar Comprobante PDF en 2 Columnas (Original y Copia)
+              </label>
+            </div>
+          )}
+
           <button
             type="submit"
-            className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-2"
+            className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-[0.98] mt-2 flex items-center justify-center gap-2 cursor-pointer"
           >
             <CreditCard className="w-5 h-5" /> Registrar en el Cuadre
           </button>

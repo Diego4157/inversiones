@@ -2,70 +2,204 @@ import jsPDF from 'jspdf';
 import type { ReceiptData } from './logic';
 
 /**
- * Generates a PDF with 8 receipts per page (2 columns, 4 rows).
+ * Renderiza el diseño de un recibo en coordenadas específicas de la página.
+ */
+function drawReceiptCard(
+  doc: jsPDF, 
+  receipt: ReceiptData, 
+  startX: number, 
+  startY: number, 
+  width: number, 
+  height: number,
+  copyLabel: string = 'ORIGINAL - CLIENTE'
+) {
+  // Marco del Recibo
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.3);
+  doc.rect(startX + 4, startY + 4, width - 8, height - 8);
+
+  const innerX = startX + 8;
+  const contentWidth = width - 16;
+  const rightX = startX + width - 8;
+
+  // Encabezado Empresa
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(20, 30, 50);
+  doc.text('INVERSIONES JD', innerX, startY + 12);
+
+  // Etiqueta de Copia / Tipo de recibo
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(100, 100, 100);
+  doc.text(`[ ${copyLabel} ]`, rightX, startY + 12, { align: 'right' });
+
+  // Fecha y Recibo N°
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60, 60, 60);
+  doc.text(`Fecha: ${receipt.date}`, innerX, startY + 18);
+  if (receipt.receiptNumber) {
+    doc.text(`N°: ${receipt.receiptNumber}`, rightX, startY + 18, { align: 'right' });
+  }
+
+  // Datos del Cliente
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 30, 30);
+  doc.text(`Cliente: ${receipt.clientName}`, innerX, startY + 24);
+
+  if (receipt.documentId) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(90, 90, 90);
+    doc.text(`Doc: ${receipt.documentId}`, rightX, startY + 24, { align: 'right' });
+  }
+
+  // Línea divisoria
+  doc.setDrawColor(210, 210, 210);
+  doc.line(innerX, startY + 27, rightX, startY + 27);
+
+  // Detalle Financiero
+  let currentY = startY + 33;
+  
+  // 1. Saldo Anterior
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(70, 70, 70);
+  doc.text('Saldo Anterior:', innerX, currentY);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`$${Number(receipt.previousBalance).toLocaleString()}`, rightX, currentY, { align: 'right' });
+
+  // 2. ABONO (Destacado)
+  currentY += 8;
+  doc.setFillColor(240, 253, 244); // Fondo verde suave
+  doc.rect(innerX - 2, currentY - 5, contentWidth + 4, 7, 'F');
+  
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(16, 120, 50); // Verde esmeralda
+  doc.text('ABONO:', innerX, currentY);
+  doc.text(`$${Number(receipt.paymentAmount).toLocaleString()}`, rightX, currentY, { align: 'right' });
+
+  // 3. Nuevo Saldo
+  currentY += 7;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(70, 70, 70);
+  doc.text('Nuevo Saldo:', innerX, currentY);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(20, 30, 50);
+  doc.text(`$${Number(receipt.newBalance).toLocaleString()}`, rightX, currentY, { align: 'right' });
+
+  // 4. Cuotas Restantes y Atrasos
+  currentY += 6;
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  doc.text(`Cuotas Restantes: ${receipt.remainingInstallments}`, innerX, currentY);
+
+  if (receipt.arrears > 0) {
+    doc.setTextColor(200, 30, 30); // Rojo si hay atraso
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Atrasos: ${receipt.arrears}`, rightX, currentY, { align: 'right' });
+  } else {
+    doc.setTextColor(30, 150, 60);
+    doc.text('Al día', rightX, currentY, { align: 'right' });
+  }
+
+  // Método de pago si existe
+  if (receipt.paymentMethod) {
+    currentY += 5;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(90, 90, 90);
+    doc.text(`Método: ${receipt.paymentMethod}`, innerX, currentY);
+  }
+
+  // Línea divisoria previa a firmas
+  doc.setDrawColor(230, 230, 230);
+  doc.line(innerX, height - 16 + startY, rightX, height - 16 + startY);
+
+  // Firmas
+  const sigY = height - 10 + startY;
+  doc.setFontSize(7);
+  doc.setTextColor(120, 120, 120);
+  doc.text('Firma Cliente', innerX + 8, sigY);
+  doc.text('Firma Cobrador', rightX - 25, sigY);
+
+  // Mensaje de pie
+  doc.setFontSize(6.5);
+  doc.setTextColor(140, 140, 140);
+  doc.text('Gracias por su puntualidad - Inversiones JD', startX + width / 2, height - 5 + startY, { align: 'center' });
+}
+
+/**
+ * Genera un PDF tamaño carta con DOS COLUMNAS (Recibo Original y Copia)
+ * para un comprobante de pago individual.
+ */
+export function generateSingleDualReceiptPDF(receipt: ReceiptData) {
+  const doc = new jsPDF('p', 'mm', 'letter');
+  const pageWidth = 215.9; // Letter width en mm
+  const pageHeight = 279.4; // Letter height en mm
+
+  const halfWidth = pageWidth / 2;
+  const receiptHeight = 90; // Alto adecuado para que quepa cómodamente en 1/3 de página o carta
+
+  // Columna Izquierda: Original para el Cliente
+  drawReceiptCard(doc, receipt, 0, 10, halfWidth, receiptHeight, 'ORIGINAL - CLIENTE');
+
+  // Columna Derecha: Copia para Cobrador / Archivo
+  drawReceiptCard(doc, receipt, halfWidth, 10, halfWidth, receiptHeight, 'COPIA - ADMINISTRACIÓN');
+
+  // Línea de corte punteada en el medio
+  doc.setDrawColor(190, 190, 190);
+  doc.setLineDashPattern([2, 2], 0);
+  doc.line(halfWidth, 5, halfWidth, receiptHeight + 15);
+  doc.setLineDashPattern([], 0); // Reset
+
+  const fileName = `Recibo_${receipt.clientName.replace(/\s+/g, '_')}_${receipt.date}.pdf`;
+  doc.save(fileName);
+}
+
+/**
+ * Genera un PDF con múltiples recibos en DOS COLUMNAS por página (carta vertical).
+ * 2 columnas x 3 filas = 6 recibos por hoja o 2 columnas consecutivas.
  */
 export function generateReceiptsPDF(receipts: ReceiptData[]) {
   const doc = new jsPDF('p', 'mm', 'letter');
-  const pageWidth = 215.9; // Letter width in mm
-  const pageHeight = 279.4; // Letter height in mm
+  const pageWidth = 215.9;
+  const pageHeight = 279.4;
   
   const cols = 2;
-  const rows = 4;
+  const rows = 3;
+  const perPage = cols * rows; // 6 recibos por hoja con excelente legibilidad
   
   const cellWidth = pageWidth / cols;
-  const cellHeight = pageHeight / rows;
+  const cellHeight = (pageHeight - 10) / rows;
 
   receipts.forEach((receipt, index) => {
-    const posInPage = index % 8;
-    const col = posInPage % 2;
-    const row = Math.floor(posInPage / 2);
+    const posInPage = index % perPage;
+    const col = posInPage % cols;
+    const row = Math.floor(posInPage / cols);
 
     if (posInPage === 0 && index !== 0) {
       doc.addPage();
     }
 
     const startX = col * cellWidth;
-    const startY = row * cellHeight;
+    const startY = 5 + (row * cellHeight);
 
-    // Draw Receipt Box
-    doc.setDrawColor(200);
-    doc.rect(startX + 5, startY + 5, cellWidth - 10, cellHeight - 10);
-
-    // Content
-    doc.setFontSize(14);
-    doc.setTextColor(40);
-    doc.text('INVERSIONES JD', startX + 10, startY + 15);
-    
-    doc.setFontSize(10);
-    doc.text(`Fecha: ${receipt.date}`, startX + 10, startY + 22);
-    doc.text(`Cliente: ${receipt.clientName}`, startX + 10, startY + 28);
-    
-    doc.line(startX + 10, startY + 32, startX + cellWidth - 10, startY + 32);
-
-    doc.text(`Saldo Anterior:`, startX + 10, startY + 40);
-    doc.text(`$${receipt.previousBalance.toLocaleString()}`, startX + cellWidth - 40, startY + 40, { align: 'right' });
-
-    doc.setFontSize(12);
-    doc.setTextColor(0, 150, 0); // Green for payment
-    doc.text(`ABONO:`, startX + 10, startY + 48);
-    doc.text(`$${receipt.paymentAmount.toLocaleString()}`, startX + cellWidth - 40, startY + 48, { align: 'right' });
-
-    doc.setFontSize(10);
-    doc.setTextColor(40);
-    doc.text(`Nuevo Saldo:`, startX + 10, startY + 56);
-    doc.text(`$${receipt.newBalance.toLocaleString()}`, startX + cellWidth - 40, startY + 56, { align: 'right' });
-
-    doc.text(`Cuotas Restantes: ${receipt.remainingInstallments}`, startX + 10, startY + 64);
-    
-    if (receipt.arrears > 0) {
-      doc.setTextColor(200, 0, 0);
-      doc.text(`Atrazos: ${receipt.arrears}`, startX + 10, startY + 70);
-    }
-    
-    doc.setTextColor(100);
-    doc.setFontSize(8);
-    doc.text('Gracias por su puntualidad', startX + 10, startY + cellHeight - 15);
+    drawReceiptCard(
+      doc, 
+      receipt, 
+      startX, 
+      startY, 
+      cellWidth, 
+      cellHeight, 
+      `RECIBO #${index + 1}`
+    );
   });
 
-  doc.save('Recibos_JD.pdf');
+  doc.save('Ruta_Recibos_JD.pdf');
 }

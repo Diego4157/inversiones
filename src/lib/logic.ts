@@ -44,12 +44,15 @@ export const RECEIPT_LAYOUT = {
 
 export interface ReceiptData {
   clientName: string;
+  documentId?: string;
   previousBalance: number;
   paymentAmount: number;
   newBalance: number;
   remainingInstallments: number;
   arrears: number;
   date: string;
+  paymentMethod?: string;
+  receiptNumber?: string | number;
 }
 
 export function chunkReceiptsForPrinting(receipts: ReceiptData[]): ReceiptData[][] {

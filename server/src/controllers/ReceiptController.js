@@ -31,9 +31,14 @@ const ReceiptController = {
         });
       }
 
-      // Obtener todos los préstamos activos
+      // Obtener todos los préstamos activos excluyendo congelados y castigados
       const activeLoans = await prisma.loan.findMany({
-        where: { status: 'ACTIVE' },
+        where: { 
+          status: 'ACTIVE',
+          client: {
+            status: { notIn: ['CONGELADO', 'CASTIGADO', 'INACTIVE'] }
+          }
+        },
         include: { client: true }
       });
 
