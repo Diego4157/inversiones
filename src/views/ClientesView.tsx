@@ -310,7 +310,7 @@ const ClientesView: React.FC<ClientesViewProps> = ({
                           <span className="text-xs text-slate-500">{c.address || 'Sin dirección'}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center space-x-2">
+                          <div className="flex flex-col items-start space-y-1.5">
                             {getStatusBadge(c.status || 'ACTIVE')}
                             <select
                               value={c.status || 'ACTIVE'}
