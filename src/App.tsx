@@ -27,6 +27,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import EditClientModal from './components/EditClientModal';
+import CreateClientModal from './components/CreateClientModal';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any | null>(() => authService.getUser());
@@ -60,7 +61,6 @@ const App: React.FC = () => {
   }>({ name: '', clientId: null, amount: '', frequency: 'DAILY', interestRate: '20', installments: '20' });
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [selectedClientObject, setSelectedClientObject] = useState<any | null>(null);
-  const [clientFormData, setClientFormData] = useState({ fullName: '', documentId: '', phone: '', address: '' });
   const [paymentAmount, setPaymentAmount] = useState('');
   const [allClients, setAllClients] = useState<any[]>([]);
 
@@ -169,27 +169,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCreateClient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      await clientService.create(clientFormData);
-      setShowAddClientModal(false);
-      setClientFormData({ fullName: '', documentId: '', phone: '', address: '' });
-      // Si estamos en la pestaña clientes, queremos que se recargue, 
-      // pero ClientesView carga por sí solo al montarse.
-      // Por simplicidad, podríamos forzar recarga recargando la tab
-      const currentTab = activeTab;
-      setActiveTab('dashboard'); 
-      setTimeout(() => setActiveTab(currentTab), 10);
-      alert('Cliente creado exitosamente');
-    } catch (error: any) {
-      alert(error.message || 'Error al crear el cliente');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleModalityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const modId = e.target.value;
     setSelectedModalityId(modId);
@@ -241,7 +220,7 @@ const App: React.FC = () => {
         />
       );
     }
-    if (activeTab === 'clientes') return <ClientesView onNewClientClick={() => setShowAddClientModal(true)} onAddCreditClick={openAddCreditForClient} />;
+    if (activeTab === 'clientes') return <ClientesView onDataChanged={loadData} />;
     if (activeTab === 'almanaque') return <CalendarView loans={loans} />;
     if (activeTab === 'ruta') return <DailyRouteView />;
     if (activeTab === 'modalidades') return <ModalitiesView />;
@@ -608,85 +587,23 @@ const App: React.FC = () => {
 
       {/* MODAL: Nuevo Cliente */}
       {showAddClientModal && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-3xl w-full max-w-md p-8 shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white">Nuevo Cliente</h3>
-              <button onClick={() => setShowAddClientModal(false)} className="text-slate-400"><X /></button>
-            </div>
-            <form className="space-y-4" onSubmit={handleCreateClient}>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400 font-medium">Nombre Completo</label>
-                  <input 
-                    type="text" 
-                    value={clientFormData.fullName} 
-                    onChange={(e) => setClientFormData({...clientFormData, fullName: e.target.value})} 
-                    placeholder="Ej: Daniel Gómez" 
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition-all text-sm" 
-                    required 
-                    autoComplete="off"
-                  />
-                </div>
-
-                {/* Detección en vivo de clientes existentes por letra o nombre */}
-                {clientFormData.fullName.trim().length >= 1 && (() => {
-                  const query = clientFormData.fullName.trim().toLowerCase();
-                  const matches = allClients.filter(c => c.fullName.toLowerCase().includes(query));
-                  if (matches.length === 0) return null;
-                  return (
-                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 space-y-2 animate-in fade-in">
-                      <div className="flex items-center text-amber-400 text-xs font-bold">
-                        <AlertCircle className="w-4 h-4 mr-1.5 shrink-0" />
-                        <span>Ya existen {matches.length} cliente(s) con letra/nombre coincidente:</span>
-                      </div>
-                      <div className="max-h-36 overflow-y-auto divide-y divide-amber-500/20 pr-1">
-                        {matches.map(c => (
-                          <div key={c.id} className="py-2 flex justify-between items-center text-xs">
-                            <div>
-                              <span className="font-bold text-white block">{c.fullName}</span>
-                              <span className="text-slate-400 text-[10px]">
-                                {c.documentId ? `Doc: ${c.documentId}` : 'Sin doc'} {c.phone ? `• Tel: ${c.phone}` : ''}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowAddClientModal(false);
-                                openAddCreditForClient(c);
-                              }}
-                              className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-lg text-[11px] transition-colors shrink-0 cursor-pointer"
-                              title="Asignar crédito directamente sin duplicar el cliente"
-                            >
-                              + Asignar Crédito
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400 font-medium">Documento de Identidad (Opcional)</label>
-                  <input type="text" value={clientFormData.documentId} onChange={(e) => setClientFormData({...clientFormData, documentId: e.target.value})} placeholder="Cédula / Documento" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition-all text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400 font-medium">Teléfono</label>
-                  <input type="text" value={clientFormData.phone} onChange={(e) => setClientFormData({...clientFormData, phone: e.target.value})} placeholder="Ej: 300 123 4567" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition-all text-sm" required />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400 font-medium">Dirección</label>
-                  <input type="text" value={clientFormData.address} onChange={(e) => setClientFormData({...clientFormData, address: e.target.value})} placeholder="Ej: Calle 10 # 20-30" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition-all text-sm" required />
-                </div>
-              </div>
-
-              <button type="submit" disabled={isLoading} className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl shadow-lg flex justify-center transition-all disabled:opacity-50 mt-4">
-                {isLoading ? <Loader2 className="animate-spin" /> : 'Registrar Cliente'}
-              </button>
-            </form>
-          </div>
-        </div>
+        <CreateClientModal
+          existingClients={allClients}
+          onClose={() => setShowAddClientModal(false)}
+          onSuccess={async (client, loan) => {
+            setShowAddClientModal(false);
+            await loadData();
+            if (loan) {
+              alert(`¡Cliente "${client.fullName}" y Crédito #${loan.id} creados exitosamente!`);
+            } else {
+              alert(`¡Cliente "${client.fullName}" registrado exitosamente!`);
+            }
+          }}
+          onSelectExistingClientForCredit={(c) => {
+            setShowAddClientModal(false);
+            openAddCreditForClient(c);
+          }}
+        />
       )}
 
       {/* MODAL: Cobro */}
