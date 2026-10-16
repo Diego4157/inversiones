@@ -17,9 +17,10 @@ import AddCapitalModal from '../components/AddCapitalModal';
 
 interface ClientesViewProps {
   onNewClientClick: () => void;
+  onAddCreditClick?: (client: any) => void;
 }
 
-const ClientesView: React.FC<ClientesViewProps> = ({ onNewClientClick }) => {
+const ClientesView: React.FC<ClientesViewProps> = ({ onNewClientClick, onAddCreditClick }) => {
   const [clientes, setClientes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -205,6 +206,17 @@ const ClientesView: React.FC<ClientesViewProps> = ({ onNewClientClick }) => {
                         )}
                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
+                        {/* Botón Asignar Crédito directo al cliente */}
+                        {onAddCreditClick && (
+                          <button 
+                            onClick={() => onAddCreditClick(c)}
+                            className="inline-flex items-center px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all mr-1 cursor-pointer"
+                            title="Asignar Crédito a este cliente"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5 mr-1" />
+                            + Crédito
+                          </button>
+                        )}
                         {/* Botón Agregar Capital para créditos activos */}
                         {activeLoan && (
                           <button 

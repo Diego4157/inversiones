@@ -21,7 +21,10 @@ import {
   AlertCircle,
   LogOut,
   Map,
-  ShieldCheck
+  ShieldCheck,
+  ChevronDown,
+  UserPlus,
+  CheckCircle
 } from 'lucide-react';
 import EditClientModal from './components/EditClientModal';
 
@@ -47,7 +50,16 @@ const App: React.FC = () => {
   const [realInvestors, setRealInvestors] = useState<any[]>([]);
   const [modalities, setModalities] = useState<any[]>([]);
   const [selectedModalityId, setSelectedModalityId] = useState<string>('custom');
-  const [formData, setFormData] = useState({ name: '', amount: '', frequency: 'DAILY', interestRate: '20', installments: '20' });
+  const [formData, setFormData] = useState<{
+    name: string;
+    clientId: number | null;
+    amount: string;
+    frequency: string;
+    interestRate: string;
+    installments: string;
+  }>({ name: '', clientId: null, amount: '', frequency: 'DAILY', interestRate: '20', installments: '20' });
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  const [selectedClientObject, setSelectedClientObject] = useState<any | null>(null);
   const [clientFormData, setClientFormData] = useState({ fullName: '', documentId: '', phone: '', address: '' });
   const [paymentAmount, setPaymentAmount] = useState('');
   const [allClients, setAllClients] = useState<any[]>([]);
@@ -115,22 +127,43 @@ const App: React.FC = () => {
     setShowPaymentModal(true);
   };
 
+  const openAddCreditForClient = (client: any) => {
+    setSelectedClientObject(client);
+    setFormData({
+      name: client.fullName,
+      clientId: client.id,
+      amount: '',
+      frequency: 'DAILY',
+      interestRate: '20',
+      installments: '20'
+    });
+    setIsClientDropdownOpen(false);
+    setShowAddModal(true);
+  };
+
   const handleCreateLoan = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.name.trim()) {
+      alert('Por favor selecciona o escribe el nombre del cliente');
+      return;
+    }
     setIsLoading(true);
     try {
       await loanService.create({
         name: formData.name,
+        clientId: formData.clientId || undefined,
         amount: Number(formData.amount),
         installments: Number(formData.installments),
         interestRate: Number(formData.interestRate),
         frequency: formData.frequency
       });
       setShowAddModal(false);
-      setFormData({ name: '', amount: '', frequency: 'DAILY', interestRate: '20', installments: '20' });
+      setFormData({ name: '', clientId: null, amount: '', frequency: 'DAILY', interestRate: '20', installments: '20' });
+      setSelectedClientObject(null);
+      setIsClientDropdownOpen(false);
       await loadData(); // Recargar después de crear
-    } catch (error) {
-      alert('Error al crear el crédito. Verifica el servidor.');
+    } catch (error: any) {
+      alert(error.message || 'Error al crear el crédito. Verifica el servidor.');
     } finally {
       setIsLoading(false);
     }
@@ -208,7 +241,7 @@ const App: React.FC = () => {
         />
       );
     }
-    if (activeTab === 'clientes') return <ClientesView onNewClientClick={() => setShowAddClientModal(true)} />;
+    if (activeTab === 'clientes') return <ClientesView onNewClientClick={() => setShowAddClientModal(true)} onAddCreditClick={openAddCreditForClient} />;
     if (activeTab === 'almanaque') return <CalendarView loans={loans} />;
     if (activeTab === 'ruta') return <DailyRouteView />;
     if (activeTab === 'modalidades') return <ModalitiesView />;
@@ -393,22 +426,122 @@ const App: React.FC = () => {
             <form className="space-y-4" onSubmit={handleCreateLoan}>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 relative">
-                  <input 
-                    type="text" 
-                    value={formData.name} 
-                    onChange={(e) => setFormData({...formData, name: e.target.value})} 
-                    placeholder="Nombre del Cliente (Existente o Nuevo)" 
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white" 
-                    required 
-                    title="Si el nombre existe, se enlazará; si no, se creará uno nuevo."
-                    list="clients-datalist"
-                    autoComplete="off"
-                  />
-                  <datalist id="clients-datalist">
-                    {allClients.map(c => (
-                      <option key={c.id} value={c.fullName} />
-                    ))}
-                  </datalist>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-xs text-slate-400 font-medium">Cliente Asignado</label>
+                    <span className="text-[11px] text-emerald-400 font-medium">
+                      {allClients.length} cliente(s) registrados
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <div className="relative flex items-center">
+                      <input 
+                        type="text" 
+                        value={formData.name} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData({...formData, name: val, clientId: null});
+                          setSelectedClientObject(null);
+                          setIsClientDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsClientDropdownOpen(true)}
+                        placeholder="Escribe el nombre o documento del cliente..." 
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 pr-10 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition-all text-sm" 
+                        required 
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsClientDropdownOpen(!isClientDropdownOpen)}
+                        className="absolute right-3 p-1 text-slate-400 hover:text-white cursor-pointer"
+                        title="Ver lista de clientes"
+                      >
+                        <ChevronDown className={`w-4 h-4 transition-transform ${isClientDropdownOpen ? 'rotate-180 text-emerald-400' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Dropdown de Clientes flotante */}
+                    {isClientDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-800">
+                        {(() => {
+                          const query = (formData.name || '').toLowerCase().trim();
+                          const matches = allClients.filter(c => 
+                            c.fullName.toLowerCase().includes(query) || 
+                            (c.documentId && c.documentId.toLowerCase().includes(query)) ||
+                            (c.phone && c.phone.includes(query))
+                          );
+
+                          if (matches.length === 0) {
+                            return (
+                              <div className="p-4 text-center">
+                                <p className="text-xs text-slate-400 mb-2">No se encontró cliente coincidente.</p>
+                                <div className="inline-flex items-center text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg font-medium">
+                                  <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                                  Se creará "{formData.name}" como nuevo cliente
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return matches.map(c => (
+                            <div
+                              key={c.id}
+                              onClick={() => {
+                                setFormData({ ...formData, name: c.fullName, clientId: c.id });
+                                setSelectedClientObject(c);
+                                setIsClientDropdownOpen(false);
+                              }}
+                              className="p-3 hover:bg-slate-800 cursor-pointer transition-colors flex items-center justify-between group"
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 rounded-full bg-slate-800 group-hover:bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
+                                  {c.fullName.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-white text-sm group-hover:text-emerald-400 transition-colors">
+                                    {c.fullName}
+                                  </div>
+                                  <div className="text-xs text-slate-400 flex items-center space-x-2">
+                                    {c.documentId && <span>Doc: {c.documentId}</span>}
+                                    {c.phone && <span>• Tel: {c.phone}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                  c.status === 'CONGELADO' ? 'bg-blue-500/20 text-blue-400' :
+                                  c.status === 'CASTIGADO' ? 'bg-red-500/20 text-red-400' :
+                                  'bg-emerald-500/20 text-emerald-400'
+                                }`}>
+                                  {c.status || 'ACTIVO'}
+                                </span>
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Indicador de cliente seleccionado */}
+                  {selectedClientObject && (
+                    <div className="mt-2 p-2.5 bg-emerald-950/40 border border-emerald-800/50 rounded-xl flex items-center justify-between text-xs text-emerald-300">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Cliente seleccionado: <strong>{selectedClientObject.fullName}</strong></span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedClientObject(null);
+                          setFormData({ ...formData, name: '', clientId: null });
+                        }}
+                        className="text-slate-400 hover:text-white cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} placeholder="Valor Prestado" className="col-span-2 w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white" required />
                 
@@ -483,10 +616,69 @@ const App: React.FC = () => {
             </div>
             <form className="space-y-4" onSubmit={handleCreateClient}>
               <div className="space-y-4">
-                <input type="text" value={clientFormData.fullName} onChange={(e) => setClientFormData({...clientFormData, fullName: e.target.value})} placeholder="Nombre Completo" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white" required />
-                <input type="text" value={clientFormData.documentId} onChange={(e) => setClientFormData({...clientFormData, documentId: e.target.value})} placeholder="Documento de Identidad (Opcional)" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white" />
-                <input type="text" value={clientFormData.phone} onChange={(e) => setClientFormData({...clientFormData, phone: e.target.value})} placeholder="Teléfono" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white" required />
-                <input type="text" value={clientFormData.address} onChange={(e) => setClientFormData({...clientFormData, address: e.target.value})} placeholder="Dirección" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white" required />
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-medium">Nombre Completo</label>
+                  <input 
+                    type="text" 
+                    value={clientFormData.fullName} 
+                    onChange={(e) => setClientFormData({...clientFormData, fullName: e.target.value})} 
+                    placeholder="Ej: Daniel Gómez" 
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition-all text-sm" 
+                    required 
+                    autoComplete="off"
+                  />
+                </div>
+
+                {/* Detección en vivo de clientes existentes por letra o nombre */}
+                {clientFormData.fullName.trim().length >= 1 && (() => {
+                  const query = clientFormData.fullName.trim().toLowerCase();
+                  const matches = allClients.filter(c => c.fullName.toLowerCase().includes(query));
+                  if (matches.length === 0) return null;
+                  return (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 space-y-2 animate-in fade-in">
+                      <div className="flex items-center text-amber-400 text-xs font-bold">
+                        <AlertCircle className="w-4 h-4 mr-1.5 shrink-0" />
+                        <span>Ya existen {matches.length} cliente(s) con letra/nombre coincidente:</span>
+                      </div>
+                      <div className="max-h-36 overflow-y-auto divide-y divide-amber-500/20 pr-1">
+                        {matches.map(c => (
+                          <div key={c.id} className="py-2 flex justify-between items-center text-xs">
+                            <div>
+                              <span className="font-bold text-white block">{c.fullName}</span>
+                              <span className="text-slate-400 text-[10px]">
+                                {c.documentId ? `Doc: ${c.documentId}` : 'Sin doc'} {c.phone ? `• Tel: ${c.phone}` : ''}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAddClientModal(false);
+                                openAddCreditForClient(c);
+                              }}
+                              className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-lg text-[11px] transition-colors shrink-0 cursor-pointer"
+                              title="Asignar crédito directamente sin duplicar el cliente"
+                            >
+                              + Asignar Crédito
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-medium">Documento de Identidad (Opcional)</label>
+                  <input type="text" value={clientFormData.documentId} onChange={(e) => setClientFormData({...clientFormData, documentId: e.target.value})} placeholder="Cédula / Documento" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition-all text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-medium">Teléfono</label>
+                  <input type="text" value={clientFormData.phone} onChange={(e) => setClientFormData({...clientFormData, phone: e.target.value})} placeholder="Ej: 300 123 4567" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition-all text-sm" required />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 font-medium">Dirección</label>
+                  <input type="text" value={clientFormData.address} onChange={(e) => setClientFormData({...clientFormData, address: e.target.value})} placeholder="Ej: Calle 10 # 20-30" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition-all text-sm" required />
+                </div>
               </div>
 
               <button type="submit" disabled={isLoading} className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl shadow-lg flex justify-center transition-all disabled:opacity-50 mt-4">

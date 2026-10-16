@@ -27,19 +27,25 @@ const LoanController = {
 
   // Crear nuevo préstamo
   async createLoan(req, res) {
-    const { name, amount, installments, frequency, interestRate } = req.body;
-    console.log(`>> Petición: Crear crédito para [${name}] por valor de $${amount} al ${interestRate}%`);
+    const { name, amount, installments, frequency, interestRate, clientId } = req.body;
+    console.log(`>> Petición: Crear crédito para [${name || clientId}] por valor de $${amount} al ${interestRate}%`);
     
     try {
-      let client = await prisma.client.findFirst({ 
-        where: { fullName: name } 
-      });
+      let client = null;
+      if (clientId) {
+        client = await prisma.client.findUnique({ where: { id: parseInt(clientId) } });
+      }
+      if (!client && name) {
+        client = await prisma.client.findFirst({ 
+          where: { fullName: name } 
+        });
+      }
 
       if (!client) {
         console.log(">> El cliente no existe. Creándolo...");
         client = await prisma.client.create({
           data: { 
-            fullName: name, 
+            fullName: name || 'Cliente Sin Nombre', 
             documentId: "ID-" + Date.now(),
             phone: "000", 
             address: "PENDIENTE" 

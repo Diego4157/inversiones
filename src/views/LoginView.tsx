@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, Lock, Mail, Loader2, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { TrendingUp, Lock, Mail, Loader2, AlertCircle, ArrowRight, ShieldCheck, RefreshCw } from 'lucide-react';
 import { authService } from '../services/api';
 
 interface LoginViewProps {
@@ -26,6 +26,24 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       setError(err.message || 'Error al iniciar sesión. Verifica tus credenciales.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleClearCacheAndReload = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) await r.unregister();
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        for (const k of keys) await caches.delete(k);
+      }
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = window.location.origin + '?v=' + Date.now();
+    } catch {
+      window.location.reload();
     }
   };
 
@@ -106,11 +124,20 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </form>
 
         {/* Tip / Access note */}
-        <div className="pt-4 border-t border-slate-800/80 text-center">
+        <div className="pt-4 border-t border-slate-800/80 text-center space-y-2">
           <div className="inline-flex items-center text-xs text-slate-500 space-x-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-500/70" />
             <span>Acceso seguro protegido por JWT y Bcrypt</span>
           </div>
+
+          <button
+            type="button"
+            onClick={handleClearCacheAndReload}
+            className="w-full text-[11px] text-slate-500 hover:text-emerald-400 flex items-center justify-center space-x-1.5 transition-colors cursor-pointer pt-1"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>¿Problemas para ingresar en modo normal? Limpiar caché y actualizar</span>
+          </button>
         </div>
       </div>
     </div>
