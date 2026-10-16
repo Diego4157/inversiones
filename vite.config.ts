@@ -11,10 +11,17 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
+      workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true
+      },
       manifest: {
         name: 'JD Inversiones - Gestión de Créditos',
         short_name: 'JD Inversiones',
         description: 'Sistema Integral de Créditos, Inversiones y Gestión de Activos',
+        start_url: '/',
+        scope: '/',
         theme_color: '#020617',
         background_color: '#020617',
         display: 'standalone',
