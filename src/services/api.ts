@@ -1,4 +1,9 @@
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+function getNormalizedApiUrl(): string {
+  const raw = (import.meta.env.VITE_API_URL || '/api').trim().replace(/\/+$/, '');
+  return raw.endsWith('/api') ? raw : `${raw}/api`;
+}
+
+export const API_URL = getNormalizedApiUrl();
 
 /**
  * Servicio de Autenticación y Control de Accesos
@@ -113,6 +118,12 @@ export const loanService = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Error al adicionar capital al crédito');
     }
+    return await res.json();
+  },
+
+  async getRecoveryLoans() {
+    const res = await fetch(`${API_URL}/loans/recovery`, { headers: getHeaders() });
+    if (!res.ok) return [];
     return await res.json();
   },
 

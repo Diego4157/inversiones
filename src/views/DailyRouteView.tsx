@@ -11,7 +11,7 @@ import {
   PauseCircle, 
   ShieldAlert
 } from 'lucide-react';
-import { receiptService, reportService, clientService } from '../services/api';
+import { receiptService, reportService, clientService, loanService } from '../services/api';
 import RecordPaymentModal from '../components/RecordPaymentModal';
 import { ArqueoModal } from '../components/ArqueoModal';
 import { enqueueOfflinePayment } from '../utils/offlineQueue';
@@ -54,11 +54,8 @@ const DailyRouteView: React.FC = () => {
       }
 
       // Cargar cartera de recuperación / congelados
-      const recRes = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/loans/recovery`);
-      if (recRes.ok) {
-        const recData = await recRes.json();
-        setRecoveryLoans(Array.isArray(recData) ? recData : []);
-      }
+      const recData = await loanService.getRecoveryLoans();
+      setRecoveryLoans(Array.isArray(recData) ? recData : []);
     } catch (error) {
       console.error(error);
       setReceipts([]);
