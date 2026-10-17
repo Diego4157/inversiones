@@ -1,5 +1,5 @@
 /**
- * Core Logic for Inversiones JD & Asset Management
+ * Core Logic for Inversiones DMR & Asset Management
  */
 
 // 1. Savings Drawers Distribution Logic

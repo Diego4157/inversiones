@@ -26,7 +26,7 @@ function drawReceiptCard(
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(20, 30, 50);
-  doc.text('INVERSIONES JD', innerX, startY + 12);
+  doc.text('INVERSIONES DMR', innerX, startY + 12);
 
   // Etiqueta de Copia / Tipo de recibo
   doc.setFontSize(8);
@@ -150,7 +150,7 @@ function drawReceiptCard(
   // Mensaje de pie
   doc.setFontSize(6.5);
   doc.setTextColor(140, 140, 140);
-  doc.text('Gracias por su puntualidad - Inversiones JD', startX + width / 2, height - 5 + startY, { align: 'center' });
+  doc.text('Gracias por su puntualidad - Inversiones DMR', startX + width / 2, height - 5 + startY, { align: 'center' });
 }
 
 /**
@@ -219,7 +219,7 @@ export function generateReceiptsPDF(receipts: ReceiptData[]) {
     );
   });
 
-  doc.save('Ruta_Recibos_JD.pdf');
+  doc.save('Ruta_Recibos_DMR.pdf');
 }
 
 export interface ArqueoReportData {
@@ -246,7 +246,7 @@ export function generateArqueoPDF(data: ArqueoReportData) {
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(20, 30, 50);
-  doc.text('INVERSIONES JD', 40, 12, { align: 'center' });
+  doc.text('INVERSIONES DMR', 40, 12, { align: 'center' });
 
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
@@ -315,7 +315,7 @@ export function generateArqueoPDF(data: ArqueoReportData) {
 
   doc.setFontSize(6.5);
   doc.setTextColor(130, 130, 130);
-  doc.text('JD Inversiones - Control de Operaciones', 40, 142, { align: 'center' });
+  doc.text('Inversiones DMR - Control de Operaciones', 40, 142, { align: 'center' });
 
   doc.save(`Arqueo_Caja_${data.date}.pdf`);
 }

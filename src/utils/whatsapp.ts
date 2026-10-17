@@ -1,6 +1,6 @@
 /**
  * Utilidades para Compartir y Enviar Comprobantes de Pago por WhatsApp
- * Formato oficial INVERSIONES JD
+ * Formato oficial INVERSIONES DMR
  */
 
 export interface WhatsAppReceiptPayload {
@@ -36,7 +36,7 @@ export function formatWhatsAppReceipt(data: WhatsAppReceiptPayload): string {
   const cuotaProgress = `${data.paidInstallments} de ${data.totalInstallments}`;
 
   const lines = [
-    `🧾 *COMPROBANTE DE PAGO - INVERSIONES JD*`,
+    `🧾 *COMPROBANTE DE PAGO - INVERSIONES DMR*`,
     `📅 *Fecha:* ${dateStr}`,
     data.receiptNumber ? `🔢 *Recibo N°:* #${data.receiptNumber}` : '',
     `━━━━━━━━━━━━━━━━━━`,
@@ -57,7 +57,7 @@ export function formatWhatsAppReceipt(data: WhatsAppReceiptPayload): string {
     data.nextPaymentDate ? `🗓️ *Próximo Cobro:* ${data.nextPaymentDate}` : '',
     `━━━━━━━━━━━━━━━━━━`,
     `¡Muchas gracias por su puntualidad!`,
-    `📞 *Contacto:* 322 508 67 31`
+    `📞 *Contacto:* 317 755 89 53`
   ];
 
   return lines.filter(line => line !== '').join('\n');

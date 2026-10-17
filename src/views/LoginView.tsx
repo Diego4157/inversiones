@@ -59,7 +59,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-emerald-600 to-emerald-400 rounded-2xl shadow-lg shadow-emerald-500/20 mb-2">
             <TrendingUp className="text-white w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">JD Inversiones</h1>
+          <h1 className="text-2xl font-black text-white tracking-tight">Inversiones DMR</h1>
           <p className="text-xs text-slate-400">Sistema de Control de Cobranza y Administración</p>
         </div>
 

@@ -178,7 +178,7 @@ const CalendarView: React.FC<{ loans: any[] }> = ({ loans }) => {
         <div class="bulk-ticket-item">
           <!-- Colilla Cobrador -->
           <div class="colilla-left">
-            <div class="ticket-header">JD INVERSIONES (Cobrador)</div>
+            <div class="ticket-header">INVERSIONES DMR (Cobrador)</div>
             <div class="ticket-body">
               <div><strong>ID Recibo:</strong> #${r.id}</div>
               <div><strong>Fecha:</strong> ${selectedDate}</div>
@@ -196,7 +196,7 @@ const CalendarView: React.FC<{ loans: any[] }> = ({ loans }) => {
           
           <!-- Recibo Cliente -->
           <div class="colilla-right">
-            <div class="ticket-header">JD INVERSIONES (Cliente)</div>
+            <div class="ticket-header">INVERSIONES DMR (Cliente)</div>
             <div class="ticket-body">
               <div><strong>ID Recibo:</strong> #${r.id}</div>
               <div><strong>Fecha:</strong> ${selectedDate}</div>
@@ -217,7 +217,7 @@ const CalendarView: React.FC<{ loans: any[] }> = ({ loans }) => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Impresión de Recibos en Lote - JD Inversiones</title>
+            <title>Impresión de Recibos en Lote - Inversiones DMR</title>
             <style>
               body {
                 font-family: Arial, sans-serif;

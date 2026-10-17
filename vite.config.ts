@@ -17,8 +17,8 @@ export default defineConfig({
         skipWaiting: true
       },
       manifest: {
-        name: 'JD Inversiones - Gestión de Créditos',
-        short_name: 'JD Inversiones',
+        name: 'Inversiones DMR - Gestión de Créditos',
+        short_name: 'Inversiones DMR',
         description: 'Sistema Integral de Créditos, Inversiones y Gestión de Activos',
         start_url: '/',
         scope: '/',

@@ -57,7 +57,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="flex justify-between items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight">Dashboard</h2>
-          <p className="text-slate-400 text-xs italic mt-0.5">JD Inversiones • Resumen Ejecutivo</p>
+          <p className="text-slate-400 text-xs italic mt-0.5">Inversiones DMR • Resumen Ejecutivo</p>
         </div>
         <div className="flex space-x-2">
           {onNavigateToRoute && (

@@ -1,4 +1,4 @@
-# JD Inversiones & Asset Management
+# Inversiones DMR & Asset Management
 
 Sistema integral para la gestión de créditos, inversiones y activos propios.
 
@@ -22,4 +22,4 @@ Sistema integral para la gestión de créditos, inversiones y activos propios.
 5. Correr backend: `cd server && node index.js`.
 
 ---
-Desarrollado para Inversiones JD.
+Desarrollado para Inversiones DMR.

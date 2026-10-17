@@ -24,7 +24,7 @@ app.use(express.json());
 app.get(['/api/health', '/health'], (req, res) => {
   res.json({
     status: 'online',
-    system: 'Inversiones JD Cloud API',
+    system: 'Inversiones DMR Cloud API',
     database: 'Neon PostgreSQL',
     timestamp: new Date().toISOString()
   });

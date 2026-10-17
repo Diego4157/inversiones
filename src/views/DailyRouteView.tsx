@@ -284,7 +284,7 @@ const DailyRouteView: React.FC = () => {
     });
 
     const html = `
-      <h3 class="text-center font-bold">JD INVERSIONES</h3>
+      <h3 class="text-center font-bold">INVERSIONES DMR</h3>
       <p class="text-center font-bold">CUADRE DIARIO DE CAJA</p>
       <div class="divider"></div>
       <div class="flex-between"><span>Fecha de Ruta:</span> <span>${dateStr}</span></div>

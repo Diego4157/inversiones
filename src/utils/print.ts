@@ -69,8 +69,8 @@ export const printThermalReceipt = (receipt: any) => {
   const paymentMethod = latestPayment?.paymentMethod || 'EFECTIVO';
 
   const html = `
-    <h3 class="text-center font-bold" style="font-size: 16px; margin: 0;">INVERSIONES JD</h3>
-    <p class="text-center" style="font-size: 12px; margin: 2px 0 6px 0;">322 508 67 31</p>
+    <h3 class="text-center font-bold" style="font-size: 16px; margin: 0;">INVERSIONES DMR</h3>
+    <p class="text-center" style="font-size: 12px; margin: 2px 0 6px 0;">317 755 89 53</p>
     <div class="divider"></div>
 
     <div class="flex-between"><span>Recibo N°:</span> <b>#${receipt.id}</b></div>

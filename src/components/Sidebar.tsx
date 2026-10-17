@@ -50,7 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user, onLogo
           <TrendingUp className="text-white w-6 h-6" />
         </div>
         <div>
-          <span className="text-xl font-black text-white tracking-tight block">JD Inversiones</span>
+          <span className="text-xl font-black text-white tracking-tight block">Inversiones DMR</span>
           <span className="text-[11px] text-slate-400">Sistema de Control</span>
         </div>
       </div>

@@ -424,7 +424,7 @@ const App: React.FC = () => {
           <div className="flex justify-between items-center mb-12">
             <div className="flex items-center space-x-2">
               <TrendingUp className="text-emerald-400 w-6 h-6" />
-              <span className="font-bold text-white tracking-tighter text-xl">JD Inversiones</span>
+              <span className="font-bold text-white tracking-tighter text-xl">Inversiones DMR</span>
             </div>
             <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-300 hover:text-white bg-slate-900 border border-slate-800 rounded-xl">
               <X className="w-6 h-6" />
@@ -495,10 +495,10 @@ const App: React.FC = () => {
             </button>
             <div className="flex items-center space-x-2 lg:hidden">
               <TrendingUp className="text-emerald-400 w-6 h-6" />
-              <span className="font-bold text-white tracking-tighter">JD Inv</span>
+              <span className="font-bold text-white tracking-tighter">Inversiones DMR</span>
             </div>
             <div className="hidden lg:flex items-center space-x-2 text-xs">
-              <span className="text-slate-500 font-medium">JD Inversiones</span>
+              <span className="text-slate-500 font-medium">Inversiones DMR</span>
               <span className="text-slate-600">/</span>
               <span className="text-white font-bold">
                 {activeTab === 'dashboard' && 'Resumen Ejecutivo'}

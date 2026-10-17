@@ -17,7 +17,7 @@ app.use('/api', apiRoutes);
 
 // Test de conexión
 app.get('/', (req, res) => {
-  res.send('Servidor de Inversiones JD está ACTIVO');
+  res.send('Servidor de Inversiones DMR está ACTIVO');
 });
 
 app.listen(PORT, () => {
