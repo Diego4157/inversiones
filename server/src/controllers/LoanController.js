@@ -243,6 +243,54 @@ const LoanController = {
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
+  },
+
+  // Ajuste manual administrativo de saldo y cuotas
+  async adjustLoanBalance(req, res) {
+    const { id } = req.params;
+    const { balance, installmentsPaid, atrasosAcumulados, notes } = req.body;
+    try {
+      const loan = await prisma.loan.findUnique({
+        where: { id: parseInt(id) },
+        include: { client: true }
+      });
+      if (!loan) return res.status(404).json({ error: 'Préstamo no encontrado' });
+
+      const newBal = balance !== undefined ? Number(balance) : Number(loan.balance);
+      const newInst = installmentsPaid !== undefined ? parseInt(installmentsPaid) : loan.installmentsPaid;
+      const newAtrasos = atrasosAcumulados !== undefined ? parseInt(atrasosAcumulados) : loan.atrasosAcumulados;
+      const newStatus = newBal <= 0 ? 'FINALIZADO' : 'ACTIVE';
+
+      const updated = await prisma.loan.update({
+        where: { id: parseInt(id) },
+        data: {
+          balance: newBal,
+          installmentsPaid: newInst,
+          atrasosAcumulados: newAtrasos,
+          status: newStatus
+        }
+      });
+
+      await recordAuditLog({
+        userId: req.user?.id || 1,
+        action: 'AJUSTE_MANUAL_SALDO',
+        details: {
+          loanId: loan.id,
+          clientName: loan.client?.fullName,
+          previousBalance: Number(loan.balance),
+          newBalance: newBal,
+          previousInstallments: loan.installmentsPaid,
+          newInstallments: newInst,
+          notes: notes || 'Ajuste manual administrativo'
+        },
+        req
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error al ajustar saldo:", error);
+      res.status(500).json({ error: error.message });
+    }
   }
 };
 

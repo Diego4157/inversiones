@@ -61,30 +61,45 @@ function drawReceiptCard(
   doc.line(innerX, startY + 27, rightX, startY + 27);
 
   // Detalle Financiero
-  let currentY = startY + 33;
+  let currentY = startY + 32;
+
+  // Datos base del crédito
+  if (receipt.totalCredit || receipt.cuotaAmount) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    const crText = receipt.totalCredit ? `Crédito: $${Number(receipt.totalCredit).toLocaleString()}` : '';
+    const cuText = receipt.cuotaAmount ? `Cuota Pactada: $${Number(receipt.cuotaAmount).toLocaleString()}` : '';
+    doc.text(crText, innerX, currentY);
+    doc.text(cuText, rightX, currentY, { align: 'right' });
+    currentY += 4.5;
+  }
   
-  // 1. Saldo Anterior
-  doc.setFontSize(9);
+  // 1. Saldo Anterior y Progreso
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(70, 70, 70);
-  doc.text('Saldo Anterior:', innerX, currentY);
+  const progText = (receipt.paidInstallments !== undefined && receipt.totalInstallments !== undefined) 
+    ? `Progreso: Cuota ${receipt.paidInstallments}/${receipt.totalInstallments}` 
+    : 'Saldo Anterior:';
+  doc.text(progText, innerX, currentY);
   doc.setFont('helvetica', 'bold');
-  doc.text(`$${Number(receipt.previousBalance).toLocaleString()}`, rightX, currentY, { align: 'right' });
+  doc.text(`Saldo Ant: $${Number(receipt.previousBalance).toLocaleString()}`, rightX, currentY, { align: 'right' });
 
   // 2. ABONO (Destacado)
-  currentY += 8;
+  currentY += 6.5;
   doc.setFillColor(240, 253, 244); // Fondo verde suave
-  doc.rect(innerX - 2, currentY - 5, contentWidth + 4, 7, 'F');
+  doc.rect(innerX - 2, currentY - 4.5, contentWidth + 4, 6.5, 'F');
   
-  doc.setFontSize(11);
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(16, 120, 50); // Verde esmeralda
   doc.text('ABONO:', innerX, currentY);
   doc.text(`$${Number(receipt.paymentAmount).toLocaleString()}`, rightX, currentY, { align: 'right' });
 
   // 3. Nuevo Saldo
-  currentY += 7;
-  doc.setFontSize(9);
+  currentY += 6;
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(70, 70, 70);
   doc.text('Nuevo Saldo:', innerX, currentY);
@@ -92,15 +107,15 @@ function drawReceiptCard(
   doc.setTextColor(20, 30, 50);
   doc.text(`$${Number(receipt.newBalance).toLocaleString()}`, rightX, currentY, { align: 'right' });
 
-  // 4. Cuotas Restantes y Atrasos
-  currentY += 6;
-  doc.setFontSize(8);
+  // 4. Cuotas Restantes y Atrasos / Dominicales
+  currentY += 5;
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(80, 80, 80);
   doc.text(`Cuotas Restantes: ${receipt.remainingInstallments}`, innerX, currentY);
 
   if (receipt.arrears > 0) {
-    doc.setTextColor(200, 30, 30); // Rojo si hay atraso
+    doc.setTextColor(200, 30, 30);
     doc.setFont('helvetica', 'bold');
     doc.text(`Atrasos: ${receipt.arrears}`, rightX, currentY, { align: 'right' });
   } else {
@@ -108,13 +123,17 @@ function drawReceiptCard(
     doc.text('Al día', rightX, currentY, { align: 'right' });
   }
 
-  // Método de pago si existe
-  if (receipt.paymentMethod) {
-    currentY += 5;
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(90, 90, 90);
+  // Dominicales y Próximo cobro
+  currentY += 4.5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  if (receipt.dominicales !== undefined && receipt.dominicales > 0) {
+    doc.text(`Dominicales: ${receipt.dominicales}`, innerX, currentY);
+  } else if (receipt.paymentMethod) {
     doc.text(`Método: ${receipt.paymentMethod}`, innerX, currentY);
+  }
+  if (receipt.nextPaymentDate) {
+    doc.text(`Próx: ${receipt.nextPaymentDate}`, rightX, currentY, { align: 'right' });
   }
 
   // Línea divisoria previa a firmas

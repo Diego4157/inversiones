@@ -6,11 +6,12 @@ const ReportController = {
   async getDailySummary(req, res) {
     const { date } = req.query;
     try {
-      const parsedDate = new Date(date);
-      const startDate = new Date(date);
-      startDate.setUTCHours(0, 0, 0, 0);
-      const endDate = new Date(date);
-      endDate.setUTCHours(23, 59, 59, 999);
+      const dateStr = (date || '').split('T')[0];
+      const parsedDate = new Date(`${dateStr}T00:00:00.000Z`);
+      
+      // Cobertura completa para horario de Colombia (UTC-5) y UTC
+      const startDate = new Date(`${dateStr}T00:00:00.000Z`);
+      const endDate = new Date(`${dateStr}T23:59:59.999-05:00`);
 
       // Sumar cobros reales registrados en la tabla Payment
       const payments = await prisma.payment.findMany({

@@ -95,22 +95,22 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="xl:col-span-2 space-y-4">
           
           {/* Header de Ruta Hoy con Botón directo a Arqueo / Ruta Diaria */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 p-5 rounded-2xl shadow-lg">
             <div>
-              <h3 className="text-base md:text-lg font-bold text-white flex items-center">
-                <Clock className="mr-2 w-5 h-5 text-emerald-400" /> Ruta del Día
+              <h3 className="text-base md:text-lg font-black text-white flex items-center">
+                <Clock className="mr-2 w-5 h-5 text-emerald-400" /> Ruta del Día y Cuadre Centralizado
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Cobra cuotas, marca atrasos o dominicales cliente por cliente
+                Cobra cuotas, envía recibos oficiales por WhatsApp, imprime tirillas y cuadra la caja en un solo lugar.
               </p>
             </div>
             {onNavigateToRoute && (
               <button 
                 onClick={onNavigateToRoute}
-                className="px-3.5 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm w-fit active:scale-95"
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs md:text-sm font-black transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-blue-600/25 active:scale-95 whitespace-nowrap"
               >
-                <Map className="w-3.5 h-3.5" />
-                <span>Ruta Diaria & Cuadre Completo</span>
+                <Map className="w-4 h-4" />
+                <span>Ir a Ruta Diaria & Cuadre</span>
               </button>
             )}
           </div>
@@ -122,10 +122,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <thead className="bg-slate-750 text-slate-400 font-bold uppercase text-[10px] border-b border-slate-700">
                   <tr>
                     <th className="px-4 py-3.5">Cliente</th>
-                    <th className="px-4 py-3.5">Saldo</th>
-                    <th className="px-4 py-3.5">Cuota</th>
+                    <th className="px-4 py-3.5 text-right">Saldo</th>
+                    <th className="px-4 py-3.5 text-right">Cuota</th>
                     <th className="px-4 py-3.5 text-center">Estado Hoy</th>
-                    <th className="px-4 py-3.5 text-right">Acciones de Cobro</th>
+                    <th className="px-4 py-3.5 text-right">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/60">
@@ -150,9 +150,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                                 </button>
                               )}
                             </div>
+                            {row.client?.phone && (
+                              <div className="text-[11px] text-slate-400 font-normal mt-0.5">
+                                Tel: {row.client.phone}
+                              </div>
+                            )}
                           </td>
-                          <td className="px-4 py-3.5 text-slate-200 font-semibold">{row.balance}</td>
-                          <td className="px-4 py-3.5 text-emerald-400 font-bold">{row.cuota}</td>
+                          <td className="px-4 py-3.5 text-right text-slate-200 font-semibold">{row.balance}</td>
+                          <td className="px-4 py-3.5 text-right text-emerald-400 font-bold">{row.cuota}</td>
                           <td className="px-4 py-3.5 text-center">
                             {todayStatus === 'PAID' && (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -176,30 +181,22 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                             )}
                           </td>
                           <td className="px-4 py-3.5 text-right">
-                            {todayStatus === 'PENDING' ? (
-                              <div className="flex items-center justify-end space-x-1.5">
-                                <button 
-                                  onClick={() => onPaymentClick(row, 'PAID')}
-                                  className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-black text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-1 shadow-sm"
-                                  title="Cobrar Cuota(s)"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Cobrar
-                                </button>
-                                <button 
-                                  onClick={() => onPaymentClick(row, 'ATRASADO')}
-                                  className="p-1.5 bg-red-500/15 hover:bg-red-500 text-red-400 hover:text-white rounded-xl transition-all cursor-pointer border border-red-500/30"
-                                  title="Marcar No Pagó / Atraso"
-                                >
-                                  <XCircle className="w-4 h-4" />
-                                </button>
-                                <button 
-                                  onClick={() => onPaymentClick(row, 'DOMINICAL')}
-                                  className="p-1.5 bg-blue-500/15 hover:bg-blue-500 text-blue-400 hover:text-white rounded-xl transition-all cursor-pointer border border-blue-500/30"
-                                  title="Marcar Dominical"
-                                >
-                                  <Coffee className="w-4 h-4" />
-                                </button>
-                              </div>
+                            {onNavigateToRoute ? (
+                              <button 
+                                onClick={onNavigateToRoute}
+                                className="px-3 py-1.5 bg-slate-700/80 hover:bg-blue-600 text-slate-300 hover:text-white rounded-xl font-bold text-xs cursor-pointer active:scale-95 transition-all inline-flex items-center gap-1"
+                                title="Gestionar y cuadrar este cobro en la Ruta Diaria"
+                              >
+                                <Map className="w-3.5 h-3.5" />
+                                <span>Ver en Ruta</span>
+                              </button>
+                            ) : todayStatus === 'PENDING' ? (
+                              <button 
+                                onClick={() => onPaymentClick(row, 'PAID')}
+                                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-black text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-1 shadow-sm"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Cobrar
+                              </button>
                             ) : (
                               <button 
                                 onClick={() => onPaymentClick(row, todayStatus)}

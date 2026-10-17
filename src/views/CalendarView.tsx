@@ -15,7 +15,8 @@ import {
 } from 'lucide-react';
 import { receiptService } from '../services/api';
 import RecordPaymentModal from '../components/RecordPaymentModal';
-import { printHtml } from '../utils/print';
+import { printThermalReceipt } from '../utils/print';
+import { formatWhatsAppReceipt, openWhatsAppShare } from '../utils/whatsapp';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -159,91 +160,7 @@ const CalendarView: React.FC<{ loans: any[] }> = ({ loans }) => {
   };
 
   const handlePrintReceipt = (receipt: any) => {
-    const totalAmount = Number(receipt.loan?.totalAmount || 0);
-    const balance = Number(receipt.loan?.balance || 0);
-    const expectedAmount = Number(receipt.expectedAmount || 0);
-    const clientName = receipt.loan?.client?.fullName || 'Cliente';
-    const documentId = receipt.loan?.client?.documentId || '';
-    
-    // Calcular saldo anterior y valores del último pago
-    const latestPayment = receipt.loan?.payments?.[0];
-    const ultimoValorPagado = latestPayment ? Number(latestPayment.amount) : expectedAmount;
-    const saldoAnterior = latestPayment ? Number(latestPayment.previousBalance) : (balance + expectedAmount);
-    const saldoActual = latestPayment ? Number(latestPayment.newBalance) : balance;
-    const fechaUltimoPago = latestPayment ? new Date(latestPayment.paymentDate || latestPayment.createdAt).toLocaleDateString() : 'N/A';
-    const dominicales = receipt.loan?.scheduledReceipts?.length || 0;
-
-    const html = `
-      <h3 class="text-center font-bold" style="font-size: 16px; margin: 0;">INVERSIONES JD</h3>
-      <p class="text-center" style="font-size: 12px; margin: 2px 0 10px 0;">322 508 67 31</p>
-
-      <div class="flex-between">
-        <span>Recibo N°: <strong>${receipt.id}</strong></span>
-        <span>Cuota N°: <strong>${receipt.loan?.installmentsPaid || 0}</strong></span>
-      </div>
-      <div class="flex-between">
-        <span>Fecha: <strong>${new Date(receipt.date).toLocaleDateString()}</strong></span>
-        <span>Atrasos: <strong style="color: red;">${receipt.loan?.atrasosAcumulados || 0}</strong></span>
-      </div>
-      <div class="flex-between">
-        <span>Dominicales: <strong>${dominicales}</strong></span>
-      </div>
-      <div class="divider"></div>
-
-      <div class="flex-between">
-        <span>Credito en dias a:</span>
-        <span><strong>${receipt.loan?.installmentsTotal || 0}</strong></span>
-      </div>
-      <div class="flex-between">
-        <span>Cuotas Pagadas:</span>
-        <span><strong>${receipt.loan?.installmentsPaid || 0}</strong></span>
-      </div>
-      <div class="flex-between">
-        <span>Saldo en Cuotas:</span>
-        <span><strong>${(receipt.loan?.installmentsTotal || 0) - (receipt.loan?.installmentsPaid || 0)}</strong></span>
-      </div>
-      <div class="flex-between font-bold" style="margin-top: 4px;">
-        <span>Vlr. Cuota a pagar:</span>
-        <span>$${expectedAmount.toLocaleString()}</span>
-      </div>
-      <div class="divider"></div>
-
-      <div class="flex-between">
-        <span>Saldo Anterior:</span>
-        <span>$${saldoAnterior.toLocaleString()}</span>
-      </div>
-      <div class="flex-between font-bold">
-        <span>Saldo Actual:</span>
-        <span>$${saldoActual.toLocaleString()}</span>
-      </div>
-
-      <p style="font-size: 10px; text-align: center; margin: 8px 0; font-style: italic;">
-        Cada 3 atrazos se cobra 1 cuota de mora.
-      </p>
-      <div class="divider"></div>
-
-      <div class="flex-between">
-        <span>Valor Credito:</span>
-        <span>$${totalAmount.toLocaleString()}</span>
-      </div>
-      <div>Nombre: <strong>${clientName}</strong></div>
-      <div>Código: <strong>${documentId}</strong></div>
-
-      <div class="divider"></div>
-      <div class="flex-between">
-        <span>Fecha ultimo pago:</span>
-        <span>${fechaUltimoPago}</span>
-      </div>
-      <div class="flex-between">
-        <span>Valor cuota:</span>
-        <span>$${expectedAmount.toLocaleString()}</span>
-      </div>
-      <div class="flex-between">
-        <span>Ultimo valor Pagado:</span>
-        <span>$${ultimoValorPagado.toLocaleString()}</span>
-      </div>
-    `;
-    printHtml(html);
+    printThermalReceipt(receipt);
   };
 
   const handlePrintBulkReceipts = () => {
@@ -378,14 +295,41 @@ const CalendarView: React.FC<{ loans: any[] }> = ({ loans }) => {
   };
 
   const handleShareWhatsApp = (receipt: any) => {
+    const totalAmount = Number(receipt.loan?.totalAmount || 0);
     const balance = Number(receipt.loan?.balance || 0);
     const expectedAmount = Number(receipt.expectedAmount || 0);
     const clientName = receipt.loan?.client?.fullName || 'Cliente';
-    const cuotasLabel = `${receipt.loan?.installmentsPaid || 0}/${receipt.loan?.installmentsTotal || 0}`;
+    const clientPhone = receipt.loan?.client?.phone || '';
+    const documentId = receipt.loan?.client?.documentId || '';
+    const latestPayment = receipt.loan?.payments?.[0];
+    const amountPaid = latestPayment ? Number(latestPayment.amount) : expectedAmount;
+    const prevBalance = latestPayment ? Number(latestPayment.previousBalance) : (balance + expectedAmount);
+    const newBalance = latestPayment ? Number(latestPayment.newBalance) : balance;
+    const dominicales = receipt.loan?.scheduledReceipts?.filter((r: any) => r.status === 'DOMINICAL')?.length || 0;
+    const arrears = receipt.loan?.atrasosAcumulados || 0;
+    const installmentsPaid = receipt.loan?.installmentsPaid || 0;
+    const installmentsTotal = receipt.loan?.installmentsTotal || 20;
 
-    const text = `*JD INVERSIONES*%0A----------------------------------%0A*RECIBO DE COBRO %23${receipt.id}*%0AFecha: ${selectedDate}%0ACrédito: %23${receipt.loanId}%0A----------------------------------%0A*Cliente:* ${clientName}%0A*Monto Recibido:* $${expectedAmount.toLocaleString()}%0A*Cuota:* ${cuotasLabel}%0A*Saldo Pendiente:* $${balance.toLocaleString()}%0A----------------------------------%0A¡Gracias por su pago!`;
-    
-    window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+    const msg = formatWhatsAppReceipt({
+      clientName,
+      phone: clientPhone,
+      documentId,
+      totalCredit: totalAmount,
+      cuotaAmount: expectedAmount,
+      paidInstallments: installmentsPaid,
+      totalInstallments: installmentsTotal,
+      previousBalance: prevBalance,
+      paymentAmount: amountPaid,
+      newBalance: newBalance,
+      remainingInstallments: Math.max(0, installmentsTotal - installmentsPaid),
+      arrears,
+      dominicales,
+      paymentMethod: latestPayment?.paymentMethod || 'EFECTIVO',
+      receiptNumber: receipt.id,
+      date: selectedDate
+    });
+
+    openWhatsAppShare(clientPhone, msg);
   };
 
   // Helper para generar los días del almanaque visual

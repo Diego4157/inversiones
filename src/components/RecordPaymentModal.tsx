@@ -8,10 +8,15 @@ import {
   XCircle, 
   Coffee, 
   Plus, 
-  Minus,
-  FileText
+  Minus, 
+  FileText,
+  MessageCircle,
+  Trash2,
+  Loader2,
+  Phone
 } from 'lucide-react';
 import { generateSingleDualReceiptPDF } from '../lib/pdf';
+import { formatWhatsAppReceipt, openWhatsAppShare } from '../utils/whatsapp';
 
 interface RecordPaymentModalProps {
   receipt: any;
@@ -34,10 +39,14 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   onConfirm 
 }) => {
   const clientName = receipt.loan?.client?.fullName || receipt.loan?.name || 'Cliente';
+  const clientPhone = receipt.loan?.client?.phone || receipt.loan?.client?.cellphone || '';
+  const clientDoc = receipt.loan?.client?.documentId || receipt.loan?.documentId || '';
+  const totalCredit = Number(receipt.loan?.totalAmount || 0);
   const balance = Number(receipt.loan?.balance || 0);
   const totalInstallments = receipt.loan?.installmentsTotal || 20;
   const paidInstallments = receipt.loan?.installmentsPaid || 0;
   const arrears = receipt.loan?.atrasosAcumulados || 0;
+  const dominicales = receipt.loan?.scheduledReceipts?.filter((r: any) => r.status === 'DOMINICAL')?.length || 0;
 
   // Cuota acordada (por cuota individual)
   const cuota = Number(receipt.expectedAmount) > 0 
@@ -53,6 +62,9 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   const [cashAmount, setCashAmount] = useState<string>('');
   const [digitalAmount, setDigitalAmount] = useState<string>('');
   const [generatePdf, setGeneratePdf] = useState<boolean>(true);
+  const [sendWhatsApp, setSendWhatsApp] = useState<boolean>(true);
+  const [customPhone, setCustomPhone] = useState<string>(clientPhone);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Calcular fecha de próximo cobro por defecto según frecuencia o estado
   const getNextDateForStatus = (targetStatus: string) => {
@@ -123,8 +135,33 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     }
   };
 
+  const handleManualWhatsAppShare = () => {
+    const remaining = Math.max(0, totalInstallments - paidInstallments - (status === 'PAID' ? numInstallments : 0));
+    const newBal = status === 'PAID' ? Math.max(0, balance - amountPaid) : balance;
+    const msg = formatWhatsAppReceipt({
+      clientName,
+      phone: customPhone || clientPhone,
+      documentId: clientDoc,
+      totalCredit: totalCredit,
+      cuotaAmount: cuota,
+      paidInstallments: paidInstallments + (status === 'PAID' ? numInstallments : 0),
+      totalInstallments: totalInstallments,
+      previousBalance: balance,
+      paymentAmount: status === 'PAID' ? amountPaid : 0,
+      newBalance: newBal,
+      remainingInstallments: remaining,
+      arrears: arrears,
+      dominicales: dominicales,
+      paymentMethod: paymentMethod,
+      nextPaymentDate: nextPaymentDate,
+      receiptNumber: receipt.id || Date.now()
+    });
+    openWhatsAppShare(customPhone || clientPhone, msg);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     let finalCash = cashAmount ? Number(cashAmount) : undefined;
     let finalDigital = digitalAmount ? Number(digitalAmount) : undefined;
@@ -144,24 +181,62 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
       }
     }
 
+    setIsSubmitting(true);
+
+    const remaining = Math.max(0, totalInstallments - paidInstallments - (status === 'PAID' ? numInstallments : 0));
+    const newBal = status === 'PAID' ? Math.max(0, balance - amountPaid) : balance;
+
     // Generar PDF si está marcado y pagó
     if (status === 'PAID' && generatePdf) {
       try {
-        const remaining = Math.max(0, totalInstallments - paidInstallments - numInstallments);
         generateSingleDualReceiptPDF({
           clientName: clientName,
-          documentId: receipt.loan?.client?.documentId || receipt.loan?.documentId,
+          documentId: clientDoc,
+          phone: customPhone || clientPhone,
+          totalCredit: totalCredit,
+          cuotaAmount: cuota,
+          paidInstallments: paidInstallments + numInstallments,
+          totalInstallments: totalInstallments,
           previousBalance: balance,
           paymentAmount: amountPaid,
-          newBalance: Math.max(0, balance - amountPaid),
+          newBalance: newBal,
           remainingInstallments: remaining,
           arrears: arrears,
+          dominicales: dominicales,
           date: new Date().toISOString().split('T')[0],
           paymentMethod: paymentMethod,
+          nextPaymentDate: nextPaymentDate,
           receiptNumber: receipt.id || Date.now()
         });
       } catch (pdfErr) {
         console.error('Error generando PDF:', pdfErr);
+      }
+    }
+
+    // Compartir automáticamente por WhatsApp si está marcado y pagó
+    if (status === 'PAID' && sendWhatsApp) {
+      try {
+        const msg = formatWhatsAppReceipt({
+          clientName,
+          phone: customPhone || clientPhone,
+          documentId: clientDoc,
+          totalCredit: totalCredit,
+          cuotaAmount: cuota,
+          paidInstallments: paidInstallments + numInstallments,
+          totalInstallments: totalInstallments,
+          previousBalance: balance,
+          paymentAmount: amountPaid,
+          newBalance: newBal,
+          remainingInstallments: remaining,
+          arrears: arrears,
+          dominicales: dominicales,
+          paymentMethod: paymentMethod,
+          nextPaymentDate: nextPaymentDate,
+          receiptNumber: receipt.id || Date.now()
+        });
+        openWhatsAppShare(customPhone || clientPhone, msg);
+      } catch (waErr) {
+        console.error('Error enviando por WhatsApp:', waErr);
       }
     }
 
@@ -210,19 +285,40 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
           </button>
         </div>
 
-        {/* Loan Stats Info Box */}
-        <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-3.5 mb-5 grid grid-cols-3 gap-2 text-center text-xs relative z-10">
-          <div>
-            <span className="text-slate-500 block mb-0.5 font-medium">Saldo Pendiente</span>
-            <span className="text-white font-bold text-sm md:text-base">${balance.toLocaleString()}</span>
+        {/* Loan Stats Info Box Enriquecida */}
+        <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-3.5 mb-5 space-y-2 relative z-10">
+          <div className="grid grid-cols-4 gap-2 text-center text-xs">
+            <div>
+              <span className="text-slate-500 block mb-0.5 text-[10px] uppercase font-bold">Total Crédito</span>
+              <span className="text-white font-bold text-xs md:text-sm">{totalCredit > 0 ? `$${totalCredit.toLocaleString()}` : 'N/A'}</span>
+            </div>
+            <div className="border-l border-slate-800/80">
+              <span className="text-slate-500 block mb-0.5 text-[10px] uppercase font-bold">Saldo Actual</span>
+              <span className="text-amber-400 font-bold text-xs md:text-sm">${balance.toLocaleString()}</span>
+            </div>
+            <div className="border-l border-slate-800/80">
+              <span className="text-slate-500 block mb-0.5 text-[10px] uppercase font-bold">Cuota Pactada</span>
+              <span className="text-emerald-400 font-bold text-xs md:text-sm">${cuota.toLocaleString()}</span>
+            </div>
+            <div className="border-l border-slate-800/80">
+              <span className="text-slate-500 block mb-0.5 text-[10px] uppercase font-bold">Progreso</span>
+              <span className="text-slate-200 font-bold text-xs md:text-sm">{paidInstallments}/{totalInstallments}</span>
+            </div>
           </div>
-          <div className="border-x border-slate-800 px-1">
-            <span className="text-slate-500 block mb-0.5 font-medium">Cuota Pactada</span>
-            <span className="text-emerald-400 font-bold text-sm md:text-base">${cuota.toLocaleString()}</span>
-          </div>
-          <div>
-            <span className="text-slate-500 block mb-0.5 font-medium">Progreso Cuotas</span>
-            <span className="text-slate-300 font-bold text-sm md:text-base">{paidInstallments}/{totalInstallments}</span>
+
+          <div className="pt-2 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400 px-1">
+            <div className="flex items-center gap-3">
+              {clientDoc && <span>Cédula: <strong className="text-slate-300">{clientDoc}</strong></span>}
+              {clientPhone && <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-emerald-400" /> <strong className="text-slate-300">{clientPhone}</strong></span>}
+            </div>
+            <div className="flex items-center gap-2">
+              {dominicales > 0 && <span className="text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">☕ {dominicales} dom</span>}
+              {arrears > 0 ? (
+                <span className="text-red-400 font-bold bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">⚠️ {arrears} {arrears === 1 ? 'atraso' : 'atrasos'}</span>
+              ) : (
+                <span className="text-emerald-400 font-semibold">Al día</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -416,18 +512,59 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                 </div>
               )}
 
-              {/* Checkbox para Comprobante PDF */}
-              <div className="flex items-center space-x-2 pt-1 pb-1">
-                <input
-                  type="checkbox"
-                  id="printDualPdf"
-                  checked={generatePdf}
-                  onChange={(e) => setGeneratePdf(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-400 border-slate-700 bg-slate-950 cursor-pointer"
-                />
-                <label htmlFor="printDualPdf" className="text-xs text-slate-300 cursor-pointer select-none flex items-center gap-1">
-                  <FileText className="w-3.5 h-3.5 text-emerald-400" /> Descargar Comprobante PDF (Original y Copia)
-                </label>
+              {/* SECCIÓN COMPROBANTES: WHATSAPP Y PDF */}
+              <div className="space-y-2.5 pt-2 border-t border-slate-800/80">
+                
+                {/* Opción WhatsApp */}
+                <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-2xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="sendWhatsAppToggle" className="text-xs text-emerald-300 font-bold cursor-pointer select-none flex items-center gap-1.5">
+                      <MessageCircle className="w-4 h-4 text-emerald-400" />
+                      Enviar comprobante por WhatsApp al cliente
+                    </label>
+                    <input
+                      type="checkbox"
+                      id="sendWhatsAppToggle"
+                      checked={sendWhatsApp}
+                      onChange={(e) => setSendWhatsApp(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-400 border-slate-700 bg-slate-950 cursor-pointer"
+                    />
+                  </div>
+
+                  {sendWhatsApp && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={customPhone}
+                        onChange={(e) => setCustomPhone(e.target.value)}
+                        placeholder="Teléfono (ej: 3101234567)"
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:border-emerald-500 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleManualWhatsAppShare}
+                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-all"
+                        title="Abrir WhatsApp con el comprobante ahora"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" /> Enviar Ya
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Checkbox para Comprobante PDF */}
+                <div className="flex items-center space-x-2 px-1">
+                  <input
+                    type="checkbox"
+                    id="printDualPdf"
+                    checked={generatePdf}
+                    onChange={(e) => setGeneratePdf(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-400 border-slate-700 bg-slate-950 cursor-pointer"
+                  />
+                  <label htmlFor="printDualPdf" className="text-xs text-slate-300 cursor-pointer select-none flex items-center gap-1">
+                    <FileText className="w-3.5 h-3.5 text-slate-400" /> Descargar Comprobante PDF (Original y Copia)
+                  </label>
+                </div>
               </div>
             </div>
           )}
@@ -504,7 +641,8 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
           {/* Botón de Envío / Confirmación */}
           <button
             type="submit"
-            className={`w-full py-4 text-white font-bold rounded-2xl shadow-xl transition-all active:scale-[0.98] mt-3 flex items-center justify-center gap-2 cursor-pointer ${
+            disabled={isSubmitting}
+            className={`w-full py-4 text-white font-bold rounded-2xl shadow-xl transition-all active:scale-[0.98] mt-3 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
               status === 'PAID' 
                 ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-500/20' 
                 : status === 'ATRASADO'
@@ -512,7 +650,11 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                 : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/20'
             }`}
           >
-            {status === 'PAID' ? (
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin mr-1" /> Guardando en Cuadre...
+              </>
+            ) : status === 'PAID' ? (
               <>
                 <CreditCard className="w-5 h-5" /> Registrar Pago de ${amountPaid.toLocaleString()} en el Cuadre
               </>
@@ -526,6 +668,31 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
               </>
             )}
           </button>
+
+          {/* Botón de Anulación / Reversión si ya fue registrado previamente */}
+          {receipt.status && receipt.status !== 'PENDING' && (
+            <div className="pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  if (confirm(`¿Estás seguro de ANULAR este cobro de "${clientName}" y devolverlo a PENDIENTE? El dinero se restaurará automáticamente al saldo del crédito.`)) {
+                    setIsSubmitting(true);
+                    onConfirm({
+                      status: 'PENDING',
+                      amountPaid: 0,
+                      paymentMethod: 'EFECTIVO',
+                      nextPaymentDate: receipt.date || new Date().toISOString().split('T')[0]
+                    });
+                  }
+                }}
+                className="w-full py-3 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 hover:border-red-500/50 font-bold rounded-2xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4 text-red-400" />
+                Anular cobro y devolver a PENDIENTE (Restaura Saldo)
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

@@ -204,6 +204,29 @@ const ReceiptController = {
       let installmentsPaid = receipt.loan.installmentsPaid;
       const amountToDeduct = amountPaid !== undefined ? Number(amountPaid) : Number(receipt.expectedAmount);
 
+      // Si el recibo ya había sido pagado previamente, revertir el pago anterior antes de aplicar el nuevo estado (evita cobros dobles)
+      if (receipt.status === 'PAID') {
+        const startOfDay = new Date(`${dateString}T00:00:00.000Z`);
+        const endOfDay = new Date(`${dateString}T23:59:59.999Z`);
+        const existingPayment = await prisma.payment.findFirst({
+          where: {
+            loanId: receipt.loanId,
+            paymentDate: { gte: startOfDay, lte: endOfDay }
+          },
+          orderBy: { paymentDate: 'desc' }
+        });
+
+        if (existingPayment) {
+          newBalance += Number(existingPayment.amount);
+          const cuotaVal = Number(receipt.loan.totalAmount) / (receipt.loan.installmentsTotal || 20);
+          const prevPaidCount = Math.max(1, Math.round(Number(existingPayment.amount) / cuotaVal));
+          installmentsPaid = Math.max(0, installmentsPaid - prevPaidCount);
+          await prisma.payment.delete({ where: { id: existingPayment.id } });
+        }
+      } else if (receipt.status === 'ATRASADO' && status !== 'ATRASADO') {
+        atrasos = Math.max(0, atrasos - 1);
+      }
+
       if (status === 'PAID') {
         newBalance -= amountToDeduct;
         const cuotaVal = Number(receipt.expectedAmount) > 0 ? Number(receipt.expectedAmount) : 1;
@@ -260,14 +283,30 @@ const ReceiptController = {
           req
         });
       } else if (status === 'ATRASADO') {
-        atrasos += 1;
-        if (atrasos >= 3) {
-          // Aplicar Mora
-          const cuota = Number(receipt.loan.totalAmount) / receipt.loan.installmentsTotal;
-          const moraFee = cuota / 3; 
-          newBalance += moraFee;
-          atrasos = 0; // Resetear contador
+        if (receipt.status !== 'ATRASADO') {
+          atrasos += 1;
+          if (atrasos >= 3) {
+            // Aplicar Mora
+            const cuota = Number(receipt.loan.totalAmount) / receipt.loan.installmentsTotal;
+            const moraFee = cuota / 3; 
+            newBalance += moraFee;
+            atrasos = 0; // Resetear contador
+          }
         }
+      } else if (status === 'PENDING') {
+        // Anulación / vuelta a pendiente
+        await recordAuditLog({
+          userId: req.user?.id,
+          action: 'REVERTIR_COBRO_PENDIENTE',
+          details: {
+            receiptId: receipt.id,
+            loanId: receipt.loan.id,
+            clientName: receipt.loan.client?.fullName,
+            restoredBalance: newBalance,
+            restoredInstallments: installmentsPaid
+          },
+          req
+        });
       }
 
       let loanStatus = receipt.loan.status;
@@ -293,8 +332,8 @@ const ReceiptController = {
         data: { status }
       });
 
-      // Si el crédito sigue activo, asegurar que el próximo cobro quede programado
-      if (loanStatus !== 'FINALIZADO') {
+      // Si el crédito sigue activo y no se está revirtiendo a PENDING, programar el siguiente cobro
+      if (loanStatus !== 'FINALIZADO' && status !== 'PENDING') {
         const currentReceiptDateStr = receipt.date ? receipt.date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
         
         let targetNextDateStr = nextPaymentDate ? nextPaymentDate.split('T')[0] : null;

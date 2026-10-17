@@ -9,14 +9,18 @@ import {
   Printer, 
   FileText, 
   PauseCircle, 
-  ShieldAlert
+  ShieldAlert,
+  Search,
+  Phone,
+  Share2
 } from 'lucide-react';
 import { receiptService, reportService, clientService, loanService } from '../services/api';
 import RecordPaymentModal from '../components/RecordPaymentModal';
 import { ArqueoModal } from '../components/ArqueoModal';
 import { enqueueOfflinePayment } from '../utils/offlineQueue';
-import { printHtml } from '../utils/print';
+import { printHtml, printThermalReceipt } from '../utils/print';
 import { generateReceiptsPDF } from '../lib/pdf';
+import { formatWhatsAppReceipt, openWhatsAppShare } from '../utils/whatsapp';
 import type { ReceiptData } from '../lib/logic';
 
 const DailyRouteView: React.FC = () => {
@@ -29,6 +33,8 @@ const DailyRouteView: React.FC = () => {
   const [defaultStatus, setDefaultStatus] = useState<string>('PAID');
   const [isClosed, setIsClosed] = useState<boolean>(false);
   const [showArqueoModal, setShowArqueoModal] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'PAID' | 'OTHER'>('ALL');
   const [statusInfo, setStatusInfo] = useState<any>({
     isClosed: false,
     isGenerated: false,
@@ -84,6 +90,61 @@ const DailyRouteView: React.FC = () => {
   const expectedPendingAmount = activeReceipts
     .filter(r => r.status === 'PENDING')
     .reduce((sum, r) => sum + Number(r.expectedAmount || 0), 0);
+
+  const pendingCount = activeReceipts.filter(r => r.status === 'PENDING').length;
+  const paidCount = activeReceipts.filter(r => r.status === 'PAID').length;
+  const otherCount = activeReceipts.filter(r => r.status === 'ATRASADO' || r.status === 'DOMINICAL').length;
+
+  const displayedReceipts = activeReceipts.filter(r => {
+    if (statusFilter === 'PENDING' && r.status !== 'PENDING') return false;
+    if (statusFilter === 'PAID' && r.status !== 'PAID') return false;
+    if (statusFilter === 'OTHER' && r.status !== 'ATRASADO' && r.status !== 'DOMINICAL') return false;
+
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    const name = (r.loan?.client?.fullName || '').toLowerCase();
+    const doc = (r.loan?.client?.documentId || '').toLowerCase();
+    const phone = (r.loan?.client?.phone || '').toLowerCase();
+    return name.includes(term) || doc.includes(term) || phone.includes(term);
+  });
+
+  const handleShareReceiptWhatsApp = (r: any) => {
+    const totalAmount = Number(r.loan?.totalAmount || 0);
+    const balance = Number(r.loan?.balance || 0);
+    const expectedAmount = Number(r.expectedAmount || 0);
+    const clientName = r.loan?.client?.fullName || 'Cliente';
+    const clientPhone = r.loan?.client?.phone || '';
+    const documentId = r.loan?.client?.documentId || '';
+    const latestPayment = r.loan?.payments?.[0];
+    const amountPaid = latestPayment ? Number(latestPayment.amount) : expectedAmount;
+    const prevBalance = latestPayment ? Number(latestPayment.previousBalance) : (balance + expectedAmount);
+    const newBalance = latestPayment ? Number(latestPayment.newBalance) : balance;
+    const dominicales = r.loan?.scheduledReceipts?.filter((rec: any) => rec.status === 'DOMINICAL')?.length || 0;
+    const arrears = r.loan?.atrasosAcumulados || 0;
+    const installmentsPaid = r.loan?.installmentsPaid || 0;
+    const installmentsTotal = r.loan?.installmentsTotal || 20;
+
+    const msg = formatWhatsAppReceipt({
+      clientName,
+      phone: clientPhone,
+      documentId,
+      totalCredit: totalAmount,
+      cuotaAmount: expectedAmount,
+      paidInstallments: installmentsPaid,
+      totalInstallments: installmentsTotal,
+      previousBalance: prevBalance,
+      paymentAmount: amountPaid,
+      newBalance: newBalance,
+      remainingInstallments: Math.max(0, installmentsTotal - installmentsPaid),
+      arrears,
+      dominicales,
+      paymentMethod: latestPayment?.paymentMethod || 'EFECTIVO',
+      receiptNumber: r.id,
+      date: selectedDate
+    });
+
+    openWhatsAppShare(clientPhone, msg);
+  };
 
   const openPaymentModal = (receipt: any, initialStatus: string) => {
     setActiveReceipt(receipt);
@@ -343,94 +404,223 @@ const DailyRouteView: React.FC = () => {
                 No hay cobros activos en la ruta para hoy. Ve al Almanaque para generarla.
               </div>
             ) : (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-slate-950/50 text-slate-400 border-b border-slate-800">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Cliente / Crédito</th>
-                        <th className="px-4 py-3 font-medium text-right">Saldo Actual</th>
-                        <th className="px-4 py-3 font-medium text-right">A Pagar</th>
-                        <th className="px-4 py-3 font-medium text-center">Estado</th>
-                        <th className="px-4 py-3 font-medium text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/50">
-                      {activeReceipts.map((r, i) => (
-                        <tr key={i} className="hover:bg-slate-800/20 transition-colors">
-                          <td className="px-4 py-4">
-                            <div className="font-bold text-white">{r.loan?.client?.fullName}</div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              {r.loan?.frequency === 'DAILY' ? 'Diario' : r.loan?.frequency === 'WEEKLY' ? 'Semanal' : 'Quincenal'} • {r.loan?.installmentsPaid}/{r.loan?.installmentsTotal} Cuotas
-                            </div>
-                            {r.loan?.atrasosAcumulados > 0 && (
-                              <div className="text-xs text-red-400 font-bold mt-0.5">
-                                Atrasos: {r.loan?.atrasosAcumulados}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            <div className="font-medium text-slate-300">${Number(r.loan?.balance || 0).toLocaleString()}</div>
-                          </td>
-                          <td className="px-4 py-4 text-right font-bold text-emerald-400">
-                            ${Number(r.expectedAmount).toLocaleString()}
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-bold ${
-                              r.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                              r.status === 'ATRASADO' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                              r.status === 'DOMINICAL' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                              r.status === 'PENDING' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                              'bg-slate-500/20 text-slate-400'
-                            }`}>
-                              {r.status === 'DOMINICAL' && <Coffee className="w-3 h-3" />}
-                              {r.status === 'ATRASADO' && <XCircle className="w-3 h-3" />}
-                              {r.status === 'PAID' && <CheckCircle2 className="w-3 h-3" />}
-                              {r.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            {!isClosed ? (
-                              r.status === 'PENDING' ? (
-                                <div className="flex items-center justify-center space-x-1">
-                                  <button 
-                                    onClick={() => openPaymentModal(r, 'PAID')}
-                                    className="p-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-lg transition-all cursor-pointer"
-                                    title="Cobrar Cuota"
-                                  >
-                                    <CheckCircle2 className="w-5 h-5" />
-                                  </button>
-                                  <button 
-                                    onClick={() => openPaymentModal(r, 'ATRASADO')}
-                                    className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-all cursor-pointer"
-                                    title="Marcar Atrasado"
-                                  >
-                                    <XCircle className="w-5 h-5" />
-                                  </button>
-                                  <button 
-                                    onClick={() => openPaymentModal(r, 'DOMINICAL')}
-                                    className="p-2 bg-slate-700/50 text-slate-300 hover:bg-slate-600 hover:text-white rounded-lg transition-all cursor-pointer"
-                                    title="Dominical"
-                                  >
-                                    <Coffee className="w-5 h-5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => openPaymentModal(r, r.status)}
-                                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg text-xs transition-all cursor-pointer"
-                                >
-                                  Editar
-                                </button>
-                              )
-                            ) : (
-                              <span className="text-xs text-slate-500 text-center block">Cerrado</span>
-                            )}
-                          </td>
+              <div className="space-y-4">
+                {/* Barra de Filtros y Búsqueda */}
+                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-slate-900 border border-slate-800 p-3.5 rounded-2xl shadow-md">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Buscar por cliente, cédula o teléfono..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-16 py-2 text-white placeholder-slate-500 text-sm focus:border-blue-500 outline-none transition-all"
+                    />
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white font-semibold cursor-pointer"
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                    <button
+                      onClick={() => setStatusFilter('ALL')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        statusFilter === 'ALL'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      Todos ({activeReceipts.length})
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter('PENDING')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        statusFilter === 'PENDING'
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
+                          : 'bg-slate-800/80 text-amber-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      Pendientes ({pendingCount})
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter('PAID')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        statusFilter === 'PAID'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-slate-800/80 text-emerald-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      Pagados ({paidCount})
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter('OTHER')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        statusFilter === 'OTHER'
+                          ? 'bg-red-600 text-white shadow-sm'
+                          : 'bg-slate-800/80 text-red-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      Atrasos/Dom ({otherCount})
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead className="bg-slate-950/70 text-slate-400 border-b border-slate-800 uppercase text-[11px] font-bold tracking-wider">
+                        <tr>
+                          <th className="px-4 py-3.5">Cliente / Crédito</th>
+                          <th className="px-4 py-3.5 text-right">Saldo Actual</th>
+                          <th className="px-4 py-3.5 text-right">A Pagar</th>
+                          <th className="px-4 py-3.5 text-center">Estado</th>
+                          <th className="px-4 py-3.5 text-center">Acciones</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/50">
+                        {displayedReceipts.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-10 text-center text-slate-500 italic">
+                              No hay cobros que coincidan con la búsqueda o filtro seleccionado.
+                            </td>
+                          </tr>
+                        ) : (
+                          displayedReceipts.map((r, i) => (
+                            <tr key={r.id || i} className="hover:bg-slate-800/25 transition-colors">
+                              <td className="px-4 py-3.5">
+                                <div className="font-bold text-white text-sm">{r.loan?.client?.fullName}</div>
+                                <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                                  {r.loan?.client?.phone && (
+                                    <a 
+                                      href={`tel:${r.loan.client.phone}`}
+                                      className="inline-flex items-center gap-1 text-slate-400 hover:text-emerald-400 transition-colors"
+                                      title="Llamar al cliente"
+                                    >
+                                      <Phone className="w-3 h-3 text-emerald-400" />
+                                      <span>{r.loan.client.phone}</span>
+                                    </a>
+                                  )}
+                                  {r.loan?.client?.documentId && (
+                                    <span className="text-slate-500">• CC: {r.loan.client.documentId}</span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-slate-500 mt-0.5">
+                                  {r.loan?.frequency === 'DAILY' ? 'Diario' : r.loan?.frequency === 'WEEKLY' ? 'Semanal' : 'Quincenal'} • Cuota {r.loan?.installmentsPaid || 0}/{r.loan?.installmentsTotal || 20}
+                                </div>
+                                {r.loan?.atrasosAcumulados > 0 && (
+                                  <div className="text-xs text-red-400 font-bold mt-0.5 flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span>{r.loan?.atrasosAcumulados} Atraso(s) acumulado(s)</span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 text-right">
+                                <div className="font-bold text-slate-200">${Number(r.loan?.balance || 0).toLocaleString()}</div>
+                                <div className="text-[11px] text-slate-500">Total: ${Number(r.loan?.totalAmount || 0).toLocaleString()}</div>
+                              </td>
+                              <td className="px-4 py-3.5 text-right font-black text-emerald-400 text-base">
+                                ${Number(r.expectedAmount).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-bold ${
+                                  r.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                  r.status === 'ATRASADO' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                                  r.status === 'DOMINICAL' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                  r.status === 'PENDING' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                  'bg-slate-500/20 text-slate-400'
+                                }`}>
+                                  {r.status === 'DOMINICAL' && <Coffee className="w-3.5 h-3.5" />}
+                                  {r.status === 'ATRASADO' && <XCircle className="w-3.5 h-3.5" />}
+                                  {r.status === 'PAID' && <CheckCircle2 className="w-3.5 h-3.5" />}
+                                  {r.status === 'PENDING' && <AlertCircle className="w-3.5 h-3.5" />}
+                                  {r.status === 'PAID' ? 'PAGADO' : r.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                {r.status === 'PENDING' ? (
+                                  !isClosed ? (
+                                    <div className="flex items-center justify-center space-x-1.5">
+                                      <button 
+                                        onClick={() => openPaymentModal(r, 'PAID')}
+                                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer active:scale-95"
+                                        title="Cobrar Cuota(s)"
+                                      >
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        <span>Cobrar</span>
+                                      </button>
+                                      <button 
+                                        onClick={() => openPaymentModal(r, 'ATRASADO')}
+                                        className="p-1.5 bg-red-500/15 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 rounded-xl transition-all cursor-pointer"
+                                        title="No pagó / Marcar Atrasado"
+                                      >
+                                        <XCircle className="w-4 h-4" />
+                                      </button>
+                                      <button 
+                                        onClick={() => openPaymentModal(r, 'DOMINICAL')}
+                                        className="p-1.5 bg-blue-500/15 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/30 rounded-xl transition-all cursor-pointer"
+                                        title="Marcar Dominical (Pasa al día siguiente)"
+                                      >
+                                        <Coffee className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-slate-500">Caja cerrada</span>
+                                  )
+                                ) : r.status === 'PAID' ? (
+                                  <div className="flex items-center justify-center space-x-1.5">
+                                    <button
+                                      onClick={() => handleShareReceiptWhatsApp(r)}
+                                      className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                                      title="Compartir Recibo Oficial por WhatsApp al cliente"
+                                    >
+                                      <Share2 className="w-3.5 h-3.5" />
+                                      <span>WhatsApp</span>
+                                    </button>
+                                    <button
+                                      onClick={() => printThermalReceipt(r)}
+                                      className="p-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 rounded-xl transition-all cursor-pointer"
+                                      title="Imprimir Tirilla Térmica (58mm/80mm)"
+                                    >
+                                      <Printer className="w-4 h-4 text-slate-300" />
+                                    </button>
+                                    {!isClosed && (
+                                      <button
+                                        onClick={() => openPaymentModal(r, r.status)}
+                                        className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                                        title="Modificar o anular este cobro para restaurar saldo"
+                                      >
+                                        Modificar
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  /* ATRASADO o DOMINICAL */
+                                  <div className="flex items-center justify-center space-x-1.5">
+                                    {!isClosed ? (
+                                      <button
+                                        onClick={() => openPaymentModal(r, r.status)}
+                                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                        title="Cambiar estado o cobrar"
+                                      >
+                                        Modificar
+                                      </button>
+                                    ) : (
+                                      <span className="text-xs text-slate-500">Registrado</span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )

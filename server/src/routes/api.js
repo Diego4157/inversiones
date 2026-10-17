@@ -41,10 +41,12 @@ router.get('/loans', LoanController.getAllLoans);
 router.post('/loans', LoanController.createLoan);
 router.post('/loans/:id/add-capital', LoanController.addCapital);
 router.post('/loans/refinance', LoanController.refinance);
+router.put('/loans/:id/adjust-balance', LoanController.adjustLoanBalance);
 router.get('/loans/recovery', (req, res) => LoanController.getRecoveryPortfolio(res));
 
 // Rutas de Pagos
 router.post('/payments', PaymentController.recordPayment);
+router.delete('/payments/:id', PaymentController.voidPayment);
 
 // Rutas de Recibos
 router.post('/receipts/generate', ReceiptController.generateDailyRoute);

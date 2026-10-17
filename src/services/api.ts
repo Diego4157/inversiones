@@ -127,12 +127,52 @@ export const loanService = {
     return await res.json();
   },
 
+  async adjustBalance(loanId: number, data: { balance?: number; installmentsPaid?: number; atrasosAcumulados?: number; notes?: string }) {
+    const res = await fetch(`${API_URL}/loans/${loanId}/adjust-balance`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al ajustar saldo del crédito');
+    }
+    return await res.json();
+  },
+
   async recordPayment(paymentData: { loanId: number; amount: number }) {
     const res = await fetch(`${API_URL}/payments`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(paymentData),
     });
+    return await res.json();
+  }
+};
+
+export const paymentService = {
+  async recordPayment(paymentData: { loanId: number; amount: number; paymentMethod?: string; cashAmount?: number; digitalAmount?: number }) {
+    const res = await fetch(`${API_URL}/payments`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(paymentData),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al registrar pago');
+    }
+    return await res.json();
+  },
+
+  async voidPayment(paymentId: number) {
+    const res = await fetch(`${API_URL}/payments/${paymentId}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al anular el pago');
+    }
     return await res.json();
   }
 };
