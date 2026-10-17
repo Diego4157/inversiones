@@ -97,7 +97,7 @@ const ReceiptController = {
             include: { 
               client: true,
               payments: {
-                orderBy: { createdAt: 'desc' },
+                orderBy: { paymentDate: 'desc' },
                 take: 1
               },
               scheduledReceipts: {

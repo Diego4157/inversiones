@@ -146,21 +146,38 @@ const App: React.FC = () => {
       
       // Si no existe, crearlo o sincronizarlo automáticamente
       if (!receipt) {
-        receipt = await receiptService.createManual(client.id, todayStr);
+        try {
+          const res = await receiptService.createManual(client.id, todayStr);
+          if (res && res.id && !res.error) {
+            receipt = res;
+          }
+        } catch (mErr) {
+          console.warn("No se pudo crear recibo manual en servidor:", mErr);
+        }
       }
 
-      if (receipt) {
+      const raw = rawLoans.find(l => l.id === client.id) || client.rawLoan || client;
+      if (receipt && receipt.id) {
         if (!receipt.loan) {
-          const raw = rawLoans.find(l => l.id === client.id);
-          receipt.loan = raw || client.rawLoan || client;
+          receipt.loan = raw;
         }
         setActivePaymentReceipt(receipt);
+      } else {
+        const expectedAmount = Number(client.cuota ? client.cuota.replace(/[^0-9]/g, '') : 0) || Math.round(Number(raw?.totalAmount || 0) / (raw?.installmentsTotal || 20));
+        setActivePaymentReceipt({
+          id: 'manual-' + client.id,
+          loanId: client.id,
+          date: todayStr,
+          expectedAmount: expectedAmount,
+          status: initialStatus,
+          loan: raw
+        });
       }
     } catch (err) {
       console.error("Error al preparar recibo de cobro:", err);
       // Fallback seguro con datos del crédito
       const raw = rawLoans.find(l => l.id === client.id) || client.rawLoan || client;
-      const expectedAmount = Number(client.cuota ? client.cuota.replace(/[^0-9]/g, '') : 0) || Math.round(Number(raw.totalAmount || 0) / (raw.installmentsTotal || 20));
+      const expectedAmount = Number(client.cuota ? client.cuota.replace(/[^0-9]/g, '') : 0) || Math.round(Number(raw?.totalAmount || 0) / (raw?.installmentsTotal || 20));
       setActivePaymentReceipt({
         id: 'manual-' + client.id,
         loanId: client.id,
@@ -213,12 +230,33 @@ const App: React.FC = () => {
           paymentData.nextPaymentDate
         );
       } else {
-        // Fallback si fue creado como mock
-        if (paymentData.status === 'PAID') {
-          await loanService.recordPayment({
-            loanId: activePaymentReceipt.loanId || activePaymentReceipt.loan?.id,
-            amount: paymentData.amountPaid
-          });
+        // Fallback si fue creado como mock: intentar crear recibo real primero
+        const loanId = activePaymentReceipt.loanId || activePaymentReceipt.loan?.id;
+        try {
+          const created = await receiptService.createManual(loanId, activePaymentReceipt.date || new Date().toISOString().split('T')[0]);
+          if (created && created.id && !created.error) {
+            await receiptService.updateStatus(
+              created.id,
+              paymentData.status,
+              paymentData.amountPaid,
+              paymentData.paymentMethod,
+              paymentData.cashAmount,
+              paymentData.digitalAmount,
+              paymentData.nextPaymentDate
+            );
+          } else if (paymentData.status === 'PAID') {
+            await loanService.recordPayment({
+              loanId: loanId,
+              amount: paymentData.amountPaid
+            });
+          }
+        } catch (innerErr) {
+          if (paymentData.status === 'PAID') {
+            await loanService.recordPayment({
+              loanId: loanId,
+              amount: paymentData.amountPaid
+            });
+          }
         }
       }
       setActivePaymentReceipt(null);

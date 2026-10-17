@@ -170,7 +170,7 @@ const CalendarView: React.FC<{ loans: any[] }> = ({ loans }) => {
     const ultimoValorPagado = latestPayment ? Number(latestPayment.amount) : expectedAmount;
     const saldoAnterior = latestPayment ? Number(latestPayment.previousBalance) : (balance + expectedAmount);
     const saldoActual = latestPayment ? Number(latestPayment.newBalance) : balance;
-    const fechaUltimoPago = latestPayment ? new Date(latestPayment.createdAt).toLocaleDateString() : 'N/A';
+    const fechaUltimoPago = latestPayment ? new Date(latestPayment.paymentDate || latestPayment.createdAt).toLocaleDateString() : 'N/A';
     const dominicales = receipt.loan?.scheduledReceipts?.length || 0;
 
     const html = `
