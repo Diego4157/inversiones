@@ -54,27 +54,42 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   const [digitalAmount, setDigitalAmount] = useState<string>('');
   const [generatePdf, setGeneratePdf] = useState<boolean>(true);
 
-  // Calcular fecha de próximo cobro por defecto según frecuencia
-  const getDefaultNextDate = () => {
-    const baseDate = receipt.date ? new Date(receipt.date) : new Date();
+  // Calcular fecha de próximo cobro por defecto según frecuencia o estado
+  const getNextDateForStatus = (targetStatus: string) => {
+    let rawDateStr = receipt.date;
+    if (typeof rawDateStr === 'string') {
+      rawDateStr = rawDateStr.split('T')[0];
+    } else if (rawDateStr instanceof Date) {
+      rawDateStr = rawDateStr.toISOString().split('T')[0];
+    } else {
+      rawDateStr = new Date().toISOString().split('T')[0];
+    }
+    const [y, m, d] = rawDateStr.split('-').map(Number);
+
+    // Si es Dominical o Atraso, SIEMPRE pasa al día siguiente (mañana)
+    if (targetStatus === 'DOMINICAL' || targetStatus === 'ATRASADO') {
+      const dt = new Date(Date.UTC(y, m - 1, d + 1, 12, 0, 0));
+      return dt.toISOString().split('T')[0];
+    }
+
     const frequency = receipt.loan?.frequency || 'DAILY';
     let daysToAdd = 1;
-
     if (frequency === 'WEEKLY') {
       daysToAdd = 7;
     } else if (frequency === 'BIWEEKLY') {
       daysToAdd = 15;
     }
 
-    baseDate.setDate(baseDate.getDate() + daysToAdd);
-    return baseDate.toISOString().split('T')[0];
+    const dt = new Date(Date.UTC(y, m - 1, d + daysToAdd, 12, 0, 0));
+    return dt.toISOString().split('T')[0];
   };
 
-  const [nextPaymentDate, setNextPaymentDate] = useState<string>(getDefaultNextDate());
+  const [nextPaymentDate, setNextPaymentDate] = useState<string>(() => getNextDateForStatus(initialStatus));
 
   // Cambiar de estado
   const handleStatusChange = (newStatus: string) => {
     setStatus(newStatus);
+    setNextPaymentDate(getNextDateForStatus(newStatus));
     if (newStatus === 'PAID') {
       const calc = Math.min(balance || (numInstallments * cuota), numInstallments * cuota);
       setAmountPaid(calc);
@@ -456,14 +471,17 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                 <div>
                   <h4 className="font-bold text-white text-sm">Cobro Dominical / Festivo</h4>
                   <p className="text-xs text-blue-300 mt-0.5">
-                    Día dominical o descanso acordado con el cliente.
+                    Día de descanso acordado con el cliente sin penalidad ni mora.
                   </p>
                 </div>
               </div>
 
-              <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs text-slate-300">
-                <p>
-                  ✅ <strong>Sin penalidad:</strong> Este cobro queda asentado en el cuadre de hoy sin sumar atrasos ni generar mora para el cliente.
+              <div className="bg-slate-950/80 border border-blue-900/40 rounded-xl p-3 text-xs text-slate-300 space-y-1.5">
+                <p className="flex items-center text-blue-300 font-bold">
+                  <Calendar className="w-3.5 h-3.5 mr-1" /> Próximo cobro reprogramado para MAÑANA: <span className="ml-1 text-white bg-blue-600/30 px-2 py-0.5 rounded border border-blue-500/40 font-mono">{nextPaymentDate}</span>
+                </p>
+                <p className="text-slate-400 text-[11px]">
+                  ⚡ El recibo se creará automáticamente en la <strong>Ruta Diaria</strong> y en el <strong>Almanaque</strong> de mañana sin que tengas que hacerlo manual.
                 </p>
               </div>
             </div>

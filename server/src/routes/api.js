@@ -50,6 +50,7 @@ router.post('/payments', PaymentController.recordPayment);
 router.post('/receipts/generate', ReceiptController.generateDailyRoute);
 router.post('/receipts/civic', ReceiptController.declareCivicDay);
 router.get('/receipts/date', ReceiptController.getRouteByDate);
+router.get('/receipts/month', ReceiptController.getReceiptsByMonth);
 router.put('/receipts/:id/status', ReceiptController.updateReceiptStatus);
 router.post('/receipts/manual', ReceiptController.createManualReceipt);
 router.post('/receipts/close', ReceiptController.closeRoute);

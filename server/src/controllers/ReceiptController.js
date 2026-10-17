@@ -113,6 +113,67 @@ const ReceiptController = {
     }
   },
 
+  // Obtener resumen de recibos por mes para el Almanaque visual
+  async getReceiptsByMonth(req, res) {
+    const { year, month } = req.query; // year: 2026, month: 10 (1-indexed)
+    try {
+      const y = parseInt(year) || new Date().getFullYear();
+      const m = parseInt(month) || (new Date().getMonth() + 1);
+
+      const startOfMonth = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
+      const endOfMonth = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+
+      const receipts = await prisma.scheduledReceipt.findMany({
+        where: {
+          date: {
+            gte: startOfMonth,
+            lte: endOfMonth
+          }
+        },
+        include: {
+          loan: {
+            include: { client: true }
+          }
+        }
+      });
+
+      // Agrupar por fecha 'YYYY-MM-DD'
+      const grouped = {};
+      receipts.forEach(r => {
+        const dStr = r.date.toISOString().split('T')[0];
+        if (!grouped[dStr]) {
+          grouped[dStr] = {
+            date: dStr,
+            total: 0,
+            pending: 0,
+            paid: 0,
+            atrasado: 0,
+            dominical: 0,
+            receipts: []
+          };
+        }
+        grouped[dStr].total++;
+        if (r.status === 'PAID') grouped[dStr].paid++;
+        else if (r.status === 'ATRASADO') grouped[dStr].atrasado++;
+        else if (r.status === 'DOMINICAL') grouped[dStr].dominical++;
+        else grouped[dStr].pending++;
+
+        grouped[dStr].receipts.push({
+          id: r.id,
+          loanId: r.loanId,
+          clientName: r.loan?.client?.fullName || 'Cliente',
+          status: r.status,
+          amount: Number(r.expectedAmount || 0)
+        });
+      });
+
+      res.json(grouped);
+    } catch (error) {
+      console.error("Error al obtener recibos del mes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   // Cambiar estado de recibo
   async updateReceiptStatus(req, res) {
     const { id } = req.params;
@@ -232,12 +293,23 @@ const ReceiptController = {
         data: { status }
       });
 
-      // Si el crédito sigue activo y hay una fecha de próximo cobro, programar el siguiente recibo
-      if (loanStatus !== 'FINALIZADO' && nextPaymentDate) {
-        const parsedNextDate = new Date(nextPaymentDate);
+      // Si el crédito sigue activo, asegurar que el próximo cobro quede programado
+      if (loanStatus !== 'FINALIZADO') {
+        const currentReceiptDateStr = receipt.date ? receipt.date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
         
+        let targetNextDateStr = nextPaymentDate ? nextPaymentDate.split('T')[0] : null;
+        
+        // Si no se especificó fecha o es menor o igual a hoy, el siguiente cobro por defecto SIEMPRE debe ser el día siguiente (mañana)
+        if (!targetNextDateStr || targetNextDateStr <= currentReceiptDateStr) {
+          const [y, m, d] = currentReceiptDateStr.split('-').map(Number);
+          const nextDay = new Date(Date.UTC(y, m - 1, d + 1, 12, 0, 0));
+          targetNextDateStr = nextDay.toISOString().split('T')[0];
+        }
+
+        const parsedNextDate = new Date(`${targetNextDateStr}T00:00:00.000Z`);
+
         // Recalcular la cuota: saldo restante dividido entre las cuotas que quedan
-        const remainingInstallments = updatedLoan.installmentsTotal - updatedLoan.installmentsPaid;
+        const remainingInstallments = Math.max(1, updatedLoan.installmentsTotal - updatedLoan.installmentsPaid);
         const newCuota = remainingInstallments > 0 ? (newBalance / remainingInstallments) : newBalance;
 
         // Verificar si ya existe un recibo para esa fecha
@@ -258,10 +330,10 @@ const ReceiptController = {
               isManual: false
             }
           });
-        } else {
+        } else if (existingNext.status !== 'PAID') {
           await prisma.scheduledReceipt.update({
             where: { id: existingNext.id },
-            data: { expectedAmount: newCuota }
+            data: { expectedAmount: newCuota, status: 'PENDING' }
           });
         }
       }

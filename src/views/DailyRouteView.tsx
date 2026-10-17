@@ -376,12 +376,16 @@ const DailyRouteView: React.FC = () => {
                             ${Number(r.expectedAmount).toLocaleString()}
                           </td>
                           <td className="px-4 py-4 text-center">
-                            <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-bold ${
-                              r.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' :
-                              r.status === 'ATRASADO' ? 'bg-red-500/20 text-red-400' :
-                              r.status === 'PENDING' ? 'bg-amber-500/20 text-amber-400' :
+                            <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-bold ${
+                              r.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                              r.status === 'ATRASADO' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                              r.status === 'DOMINICAL' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                              r.status === 'PENDING' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
                               'bg-slate-500/20 text-slate-400'
                             }`}>
+                              {r.status === 'DOMINICAL' && <Coffee className="w-3 h-3" />}
+                              {r.status === 'ATRASADO' && <XCircle className="w-3 h-3" />}
+                              {r.status === 'PAID' && <CheckCircle2 className="w-3 h-3" />}
                               {r.status}
                             </span>
                           </td>
@@ -532,11 +536,15 @@ const DailyRouteView: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-center">
                   <span className="block text-slate-500 text-xs mb-1">Atrasos Hoy</span>
-                  <span className="text-2xl font-bold text-red-400">{summary?.totalAtrasosCount || 0}</span>
+                  <span className="text-2xl font-bold text-red-400">
+                    {summary?.totalAtrasosCount !== undefined ? summary.totalAtrasosCount : activeReceipts.filter(r => r.status === 'ATRASADO').length}
+                  </span>
                 </div>
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-center">
                   <span className="block text-slate-500 text-xs mb-1">Dominicales</span>
-                  <span className="text-2xl font-bold text-slate-300">{summary?.totalDominicalesCount || 0}</span>
+                  <span className="text-2xl font-bold text-blue-400">
+                    {summary?.totalDominicalesCount !== undefined ? summary.totalDominicalesCount : activeReceipts.filter(r => r.status === 'DOMINICAL').length}
+                  </span>
                 </div>
               </div>
 

@@ -298,10 +298,13 @@ const App: React.FC = () => {
     const enMora = rawLoans.reduce((acc, l) => acc + (Number(l.atrasosAcumulados) > 0 ? Number(l.balance) : 0), 0);
     const sociosCount = realInvestors.length;
     
-    // Calcular recaudo hoy buscando pagos cuya fecha de creación sea la de hoy
+    // Calcular recaudo hoy buscando pagos cuya fecha sea la de hoy
     const todayStr = new Date().toISOString().split('T')[0];
     const recaudoHoy = rawLoans.reduce((acc, l) => {
-      const todayPayments = l.payments?.filter((p: any) => p.createdAt?.startsWith(todayStr)) || [];
+      const todayPayments = l.payments?.filter((p: any) => {
+        const pDate = p.paymentDate || p.createdAt;
+        return pDate ? pDate.toString().startsWith(todayStr) : false;
+      }) || [];
       const sumToday = todayPayments.reduce((pAcc: number, p: any) => pAcc + Number(p.amount), 0);
       return acc + sumToday;
     }, 0);

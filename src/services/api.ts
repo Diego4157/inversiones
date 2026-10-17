@@ -216,6 +216,10 @@ export const receiptService = {
     const res = await fetch(`${API_URL}/receipts/date?date=${date}`, { headers: getHeaders() });
     return await res.json();
   },
+  async getReceiptsByMonth(year: number, month: number) {
+    const res = await fetch(`${API_URL}/receipts/month?year=${year}&month=${month}`, { headers: getHeaders() });
+    return await res.json();
+  },
   async updateStatus(id: number, status: string, amountPaid?: number, paymentMethod?: string, cashAmount?: number, digitalAmount?: number, nextPaymentDate?: string) {
     const res = await fetch(`${API_URL}/receipts/${id}/status`, {
       method: 'PUT',
