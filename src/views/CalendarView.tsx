@@ -328,10 +328,26 @@ const CalendarView: React.FC<{ loans: any[] }> = ({ loans }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Almanaque / Calendario</h1>
-          <p className="text-slate-400 mt-1">Programa y visualiza los recibos por día</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight flex items-center">
+            <CalendarIcon className="mr-3 text-emerald-400" /> Almanaque / Calendario
+            {isClosed && (
+              <span className="ml-3 text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full font-bold uppercase tracking-wider">
+                Cerrada y Cuadrada
+              </span>
+            )}
+          </h1>
+          <p className="text-slate-400 mt-1">Programa, genera y visualiza los recibos de cobro por día</p>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <input 
+            type="date" 
+            value={selectedDate}
+            onChange={(e) => loadRoute(e.target.value)}
+            className="bg-slate-900 border border-emerald-500/50 rounded-xl p-2.5 text-white focus:border-emerald-500 outline-none text-sm font-bold shadow-md cursor-pointer"
+          />
         </div>
       </div>
 

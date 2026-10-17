@@ -2,22 +2,27 @@ import React from 'react';
 import { 
   Wallet, 
   TrendingUp, 
-  AlertCircle,
-  FileText,
-  Plus,
-  ArrowUpRight,
-  Clock,
-  Edit2
+  AlertCircle, 
+  Plus, 
+  ArrowUpRight, 
+  Clock, 
+  Edit2,
+  CheckCircle2,
+  XCircle,
+  Coffee,
+  Map
 } from 'lucide-react';
 import AssetCard from '../components/AssetCard';
 
 interface DashboardViewProps {
   onNewClick: () => void;
-  onPaymentClick: (client: any) => void;
+  onPaymentClick: (client: any, status?: string) => void;
+  onNavigateToRoute?: () => void;
   onAssetClick: () => void;
   onEditClient: (client: any) => void;
   customLoans?: any[]; // Lista de préstamos reales
   assets?: any[];      // Lista de activos reales
+  todayReceipts?: any[]; // Recibos del día para reflejar estado real
   stats?: {
     carteraTotal: number;
     recaudoHoy: number;
@@ -29,10 +34,12 @@ interface DashboardViewProps {
 const DashboardView: React.FC<DashboardViewProps> = ({ 
   onNewClick, 
   onPaymentClick, 
+  onNavigateToRoute,
   onAssetClick, 
   onEditClient, 
   customLoans = [], 
   assets = [],
+  todayReceipts = [],
   stats = { carteraTotal: 0, recaudoHoy: 0, enMora: 0, sociosCount: 0 }
 }) => {
   const rutaHoy = customLoans;
@@ -45,31 +52,40 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in duration-300">
       {/* Header */}
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Dashboard</h2>
-          <p className="text-slate-300 text-sm italic">JD Inversiones</p>
+          <h2 className="text-2xl font-bold text-white tracking-tight">Dashboard</h2>
+          <p className="text-slate-400 text-xs italic mt-0.5">JD Inversiones • Resumen Ejecutivo</p>
         </div>
         <div className="flex space-x-2">
-          <button className="p-2 bg-slate-700 text-white rounded-lg cursor-pointer"><FileText className="w-5 h-5" /></button>
+          {onNavigateToRoute && (
+            <button 
+              onClick={onNavigateToRoute}
+              className="p-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl border border-slate-700 cursor-pointer flex items-center gap-1.5 text-xs font-bold transition-all"
+              title="Abrir Ruta Diaria y Arqueo"
+            >
+              <Map className="w-4 h-4 text-blue-400" />
+              <span className="hidden sm:inline">Ruta Diaria</span>
+            </button>
+          )}
           <button 
             onClick={onNewClick}
-            className="px-4 py-2 bg-emerald-500 text-white rounded-lg font-bold flex items-center cursor-pointer"
+            className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-black text-xs md:text-sm flex items-center cursor-pointer transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
           >
-            <Plus className="w-5 h-5 mr-1" /> Nuevo
+            <Plus className="w-4 h-4 mr-1.5" /> Nuevo Crédito
           </button>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statItems.map((stat) => (
-          <div key={stat.title} className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-lg">
-            <div className={`mb-1 ${stat.color}`}><stat.icon className="w-5 h-5" /></div>
-            <p className="text-slate-400 text-[10px] font-bold uppercase">{stat.title}</p>
-            <h3 className="text-lg font-bold text-white">{stat.value}</h3>
+          <div key={stat.title} className="bg-slate-800/90 border border-slate-700/80 p-4 rounded-2xl shadow-xl hover:border-slate-600 transition-all">
+            <div className={`mb-2 ${stat.color}`}><stat.icon className="w-5 h-5" /></div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">{stat.title}</p>
+            <h3 className="text-lg md:text-xl font-black text-white mt-0.5">{stat.value}</h3>
           </div>
         ))}
       </div>
@@ -77,57 +93,149 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Main Content */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-4">
-          <h3 className="text-lg font-bold text-white flex items-center"><Clock className="mr-2 w-5 h-5 text-emerald-400" /> Ruta Hoy</h3>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-xl">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-700 text-slate-300 font-bold uppercase text-[10px]">
-                <tr><th className="px-4 py-3">Cliente</th><th className="px-4 py-3">Saldo</th><th className="px-4 py-3 text-right">Acción</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700">
-                {rutaHoy.length > 0 ? (
-                  rutaHoy.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-700/30 transition-all">
-                      <td className="px-4 py-4 font-bold text-white flex items-center gap-2">
-                        {row.name}
-                        {row.client && (
-                          <button 
-                            onClick={() => onEditClient(row.client)}
-                            className="p-1 text-slate-500 hover:text-white transition-colors"
-                            title="Editar Cliente"
-                          >
-                            <Edit2 className="w-4 h-4" /> 
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-slate-200">{row.balance}</td>
-                      <td className="px-4 py-4 text-right">
-                        <button 
-                          onClick={() => onPaymentClick(row)}
-                          className="px-3 py-1 bg-emerald-500 text-white rounded-lg font-bold text-xs cursor-pointer active:scale-95 transition-all"
-                        >
-                          Cobrar
-                        </button>
+          
+          {/* Header de Ruta Hoy con Botón directo a Arqueo / Ruta Diaria */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+            <div>
+              <h3 className="text-base md:text-lg font-bold text-white flex items-center">
+                <Clock className="mr-2 w-5 h-5 text-emerald-400" /> Ruta del Día
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Cobra cuotas, marca atrasos o dominicales cliente por cliente
+              </p>
+            </div>
+            {onNavigateToRoute && (
+              <button 
+                onClick={onNavigateToRoute}
+                className="px-3.5 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm w-fit active:scale-95"
+              >
+                <Map className="w-3.5 h-3.5" />
+                <span>Ruta Diaria & Cuadre Completo</span>
+              </button>
+            )}
+          </div>
+
+          {/* Tabla de Clientes en Ruta */}
+          <div className="bg-slate-800/90 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-slate-750 text-slate-400 font-bold uppercase text-[10px] border-b border-slate-700">
+                  <tr>
+                    <th className="px-4 py-3.5">Cliente</th>
+                    <th className="px-4 py-3.5">Saldo</th>
+                    <th className="px-4 py-3.5">Cuota</th>
+                    <th className="px-4 py-3.5 text-center">Estado Hoy</th>
+                    <th className="px-4 py-3.5 text-right">Acciones de Cobro</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/60">
+                  {rutaHoy.length > 0 ? (
+                    rutaHoy.map((row) => {
+                      // Buscar si este cliente ya tiene recibo registrado para hoy
+                      const todayReceipt = todayReceipts.find((r: any) => r.loanId === row.id);
+                      const todayStatus = todayReceipt ? todayReceipt.status : 'PENDING';
+
+                      return (
+                        <tr key={row.id} className="hover:bg-slate-700/40 transition-colors">
+                          <td className="px-4 py-3.5 font-bold text-white">
+                            <div className="flex items-center gap-1.5">
+                              <span>{row.name}</span>
+                              {row.client && (
+                                <button 
+                                  onClick={() => onEditClient(row.client)}
+                                  className="p-1 text-slate-500 hover:text-white transition-colors cursor-pointer"
+                                  title="Editar Cliente"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" /> 
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-200 font-semibold">{row.balance}</td>
+                          <td className="px-4 py-3.5 text-emerald-400 font-bold">{row.cuota}</td>
+                          <td className="px-4 py-3.5 text-center">
+                            {todayStatus === 'PAID' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                <CheckCircle2 className="w-3 h-3" /> Pagó
+                              </span>
+                            )}
+                            {todayStatus === 'ATRASADO' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">
+                                <XCircle className="w-3 h-3" /> Atraso
+                              </span>
+                            )}
+                            {todayStatus === 'DOMINICAL' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                <Coffee className="w-3 h-3" /> Dominical
+                              </span>
+                            )}
+                            {todayStatus === 'PENDING' && (
+                              <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                Pendiente
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            {todayStatus === 'PENDING' ? (
+                              <div className="flex items-center justify-end space-x-1.5">
+                                <button 
+                                  onClick={() => onPaymentClick(row, 'PAID')}
+                                  className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-black text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-1 shadow-sm"
+                                  title="Cobrar Cuota(s)"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Cobrar
+                                </button>
+                                <button 
+                                  onClick={() => onPaymentClick(row, 'ATRASADO')}
+                                  className="p-1.5 bg-red-500/15 hover:bg-red-500 text-red-400 hover:text-white rounded-xl transition-all cursor-pointer border border-red-500/30"
+                                  title="Marcar No Pagó / Atraso"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => onPaymentClick(row, 'DOMINICAL')}
+                                  className="p-1.5 bg-blue-500/15 hover:bg-blue-500 text-blue-400 hover:text-white rounded-xl transition-all cursor-pointer border border-blue-500/30"
+                                  title="Marcar Dominical"
+                                >
+                                  <Coffee className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => onPaymentClick(row, todayStatus)}
+                                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-bold text-xs cursor-pointer transition-all"
+                              >
+                                Modificar
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-10 text-center text-slate-500 italic">
+                        No hay créditos activos hoy. Registra uno nuevo para empezar.
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-10 text-center text-slate-500 italic">No hay créditos activos hoy. Registra uno nuevo para empezar.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
+        {/* Panel Lateral: Activos */}
         <div className="space-y-4">
-          <h3 className="text-lg font-bold text-white flex items-center"><ArrowUpRight className="mr-2 w-5 h-5 text-blue-400" /> Activos</h3>
+          <h3 className="text-lg font-bold text-white flex items-center">
+            <ArrowUpRight className="mr-2 w-5 h-5 text-blue-400" /> Activos
+          </h3>
           {assets.length > 0 ? (
             assets.map((asset) => (
               <AssetCard 
                 key={asset.id}
                 assetName={`${asset.name} (${asset.plate})`} 
-                dailyRevenue={Number(asset.dailyRentTarget || 35000)} 
+                dailyRevenue={Number(asset.dailyTargetIncome || asset.dailyRentTarget || 35000)} 
                 onClick={onAssetClick} 
               />
             ))

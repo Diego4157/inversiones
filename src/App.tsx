@@ -9,8 +9,10 @@ import AssetsView from './views/AssetsView';
 import InversionistasView from './views/InversionistasView';
 import { AuditLogsView } from './views/AuditLogsView';
 import { OfflineSyncBadge } from './components/OfflineSyncBadge';
-import { authService, loanService, modalityService, clientService, assetService, investorService } from './services/api';
+import { authService, loanService, modalityService, clientService, assetService, investorService, receiptService } from './services/api';
 import LoginView from './views/LoginView';
+import RecordPaymentModal from './components/RecordPaymentModal';
+import { enqueueOfflinePayment } from './utils/offlineQueue';
 import { 
   Menu, 
   X, 
@@ -39,7 +41,6 @@ const App: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
   const [showEditClientModal, setShowEditClientModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showAssetModal, setShowAssetModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +48,9 @@ const App: React.FC = () => {
 
   const [loans, setLoans] = useState<any[]>([]);
   const [rawLoans, setRawLoans] = useState<any[]>([]);
+  const [todayReceipts, setTodayReceipts] = useState<any[]>([]);
+  const [activePaymentReceipt, setActivePaymentReceipt] = useState<any | null>(null);
+  const [paymentInitialStatus, setPaymentInitialStatus] = useState<string>('PAID');
   const [realAssets, setRealAssets] = useState<any[]>([]);
   const [realInvestors, setRealInvestors] = useState<any[]>([]);
   const [modalities, setModalities] = useState<any[]>([]);
@@ -58,10 +62,10 @@ const App: React.FC = () => {
     frequency: string;
     interestRate: string;
     installments: string;
-  }>({ name: '', clientId: null, amount: '', frequency: 'DAILY', interestRate: '20', installments: '20' });
+    firstPaymentDate: string;
+  }>({ name: '', clientId: null, amount: '', frequency: 'DAILY', interestRate: '20', installments: '20', firstPaymentDate: new Date().toISOString().split('T')[0] });
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [selectedClientObject, setSelectedClientObject] = useState<any | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState('');
   const [allClients, setAllClients] = useState<any[]>([]);
 
   const loadData = async () => {
@@ -77,8 +81,9 @@ const App: React.FC = () => {
           id: l.id,
           name: l.client?.fullName || 'Sin Nombre',
           balance: `$${(l.balance || 0).toLocaleString()}`,
-          cuota: `$${((l.totalAmount || 0) / (l.installmentsTotal || 20)).toLocaleString()}`,
-          client: l.client
+          cuota: `$${Math.round((l.totalAmount || 0) / (l.installmentsTotal || 20)).toLocaleString()}`,
+          client: l.client,
+          rawLoan: l
         }));
         setLoans(formatted);
         setStatusMessage(null);
@@ -97,6 +102,15 @@ const App: React.FC = () => {
 
       const investorsData = await investorService.getAll();
       if (Array.isArray(investorsData)) setRealInvestors(investorsData);
+
+      // Cargar recibos programados de hoy para sincronizar el estado
+      const todayStr = new Date().toISOString().split('T')[0];
+      try {
+        const rData = await receiptService.getRouteByDate(todayStr);
+        if (Array.isArray(rData)) setTodayReceipts(rData);
+      } catch (rErr) {
+        console.warn("No se pudieron cargar recibos de hoy:", rErr);
+      }
 
     } catch (error) {
       console.error("Error cargando:", error);
@@ -121,10 +135,97 @@ const App: React.FC = () => {
     verifySession();
   }, []);
 
-  const openPayment = (client: any) => {
+  const openPayment = async (client: any, initialStatus: string = 'PAID') => {
     setSelectedClient(client);
-    setPaymentAmount(client.cuota.replace(/[^0-9]/g, ''));
-    setShowPaymentModal(true);
+    setPaymentInitialStatus(initialStatus);
+
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      // Buscar si ya existe un recibo de hoy para este crédito
+      let receipt = todayReceipts.find(r => r.loanId === client.id);
+      
+      // Si no existe, crearlo o sincronizarlo automáticamente
+      if (!receipt) {
+        receipt = await receiptService.createManual(client.id, todayStr);
+      }
+
+      if (receipt) {
+        if (!receipt.loan) {
+          const raw = rawLoans.find(l => l.id === client.id);
+          receipt.loan = raw || client.rawLoan || client;
+        }
+        setActivePaymentReceipt(receipt);
+      }
+    } catch (err) {
+      console.error("Error al preparar recibo de cobro:", err);
+      // Fallback seguro con datos del crédito
+      const raw = rawLoans.find(l => l.id === client.id) || client.rawLoan || client;
+      const expectedAmount = Number(client.cuota ? client.cuota.replace(/[^0-9]/g, '') : 0) || Math.round(Number(raw.totalAmount || 0) / (raw.installmentsTotal || 20));
+      setActivePaymentReceipt({
+        id: 'manual-' + client.id,
+        loanId: client.id,
+        date: new Date().toISOString().split('T')[0],
+        expectedAmount: expectedAmount,
+        status: initialStatus,
+        loan: raw
+      });
+    }
+  };
+
+  const handleDashboardPaymentConfirm = async (paymentData: {
+    status: string;
+    amountPaid: number;
+    paymentMethod: string;
+    cashAmount?: number;
+    digitalAmount?: number;
+    nextPaymentDate: string;
+  }) => {
+    if (!activePaymentReceipt) return;
+
+    // Manejo Offline si no hay conexión a internet
+    if (!navigator.onLine) {
+      enqueueOfflinePayment({
+        receiptId: typeof activePaymentReceipt.id === 'number' ? activePaymentReceipt.id : 0,
+        loanId: activePaymentReceipt.loanId || activePaymentReceipt.loan?.id,
+        clientName: activePaymentReceipt.loan?.client?.fullName || 'Cliente',
+        status: paymentData.status,
+        amountPaid: paymentData.amountPaid,
+        paymentMethod: paymentData.paymentMethod,
+        cashAmount: paymentData.cashAmount,
+        digitalAmount: paymentData.digitalAmount,
+        nextPaymentDate: paymentData.nextPaymentDate
+      });
+      setActivePaymentReceipt(null);
+      alert('📡 Operación guardada en la cola offline. Se sincronizará automáticamente cuando vuelva la conexión.');
+      await loadData();
+      return;
+    }
+
+    try {
+      if (typeof activePaymentReceipt.id === 'number') {
+        await receiptService.updateStatus(
+          activePaymentReceipt.id,
+          paymentData.status,
+          paymentData.amountPaid,
+          paymentData.paymentMethod,
+          paymentData.cashAmount,
+          paymentData.digitalAmount,
+          paymentData.nextPaymentDate
+        );
+      } else {
+        // Fallback si fue creado como mock
+        if (paymentData.status === 'PAID') {
+          await loanService.recordPayment({
+            loanId: activePaymentReceipt.loanId || activePaymentReceipt.loan?.id,
+            amount: paymentData.amountPaid
+          });
+        }
+      }
+      setActivePaymentReceipt(null);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Error al procesar el cobro');
+    }
   };
 
   const openAddCreditForClient = (client: any) => {
@@ -135,7 +236,8 @@ const App: React.FC = () => {
       amount: '',
       frequency: 'DAILY',
       interestRate: '20',
-      installments: '20'
+      installments: '20',
+      firstPaymentDate: new Date().toISOString().split('T')[0]
     });
     setIsClientDropdownOpen(false);
     setShowAddModal(true);
@@ -155,10 +257,11 @@ const App: React.FC = () => {
         amount: Number(formData.amount),
         installments: Number(formData.installments),
         interestRate: Number(formData.interestRate),
-        frequency: formData.frequency
+        frequency: formData.frequency,
+        firstPaymentDate: formData.firstPaymentDate
       });
       setShowAddModal(false);
-      setFormData({ name: '', clientId: null, amount: '', frequency: 'DAILY', interestRate: '20', installments: '20' });
+      setFormData({ name: '', clientId: null, amount: '', frequency: 'DAILY', interestRate: '20', installments: '20', firstPaymentDate: new Date().toISOString().split('T')[0] });
       setSelectedClientObject(null);
       setIsClientDropdownOpen(false);
       await loadData(); // Recargar después de crear
@@ -212,10 +315,12 @@ const App: React.FC = () => {
         <DashboardView 
           onNewClick={() => setShowAddModal(true)} 
           onPaymentClick={openPayment} 
+          onNavigateToRoute={() => setActiveTab('ruta')}
           onAssetClick={() => setShowAssetModal(true)} 
           onEditClient={handleEditClient} 
           customLoans={loans} 
           assets={realAssets}
+          todayReceipts={todayReceipts}
           stats={getStats()}
         />
       );
@@ -231,10 +336,12 @@ const App: React.FC = () => {
       <DashboardView 
         onNewClick={() => setShowAddModal(true)} 
         onPaymentClick={openPayment} 
+        onNavigateToRoute={() => setActiveTab('ruta')}
         onAssetClick={() => setShowAssetModal(true)} 
         onEditClient={handleEditClient} 
         customLoans={loans} 
         assets={realAssets}
+        todayReceipts={todayReceipts}
         stats={getStats()}
       />
     );
@@ -552,6 +659,20 @@ const App: React.FC = () => {
                   <label className="text-xs text-slate-400 mb-1 block">Plazo ({formData.frequency === 'DAILY' ? 'días' : formData.frequency === 'WEEKLY' ? 'semanas' : 'quincenas'})</label>
                   <input type="number" disabled={selectedModalityId !== 'custom'} value={formData.installments} onChange={(e) => setFormData({...formData, installments: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white disabled:opacity-50" required />
                 </div>
+
+                <div className="col-span-2">
+                  <label className="text-xs text-emerald-400 font-bold mb-1 block">Fecha del Primer Cobro (Inicio de Ruta)</label>
+                  <input
+                    type="date"
+                    value={formData.firstPaymentDate}
+                    onChange={(e) => setFormData({...formData, firstPaymentDate: e.target.value})}
+                    className="w-full bg-slate-900 border border-emerald-600/50 rounded-xl p-3 text-emerald-300 font-bold focus:border-emerald-500 transition-all outline-none"
+                    required
+                  />
+                  <span className="text-[11px] text-slate-400 mt-1 block">
+                    * Este crédito se programará automáticamente en la Ruta Diaria y Almanaque de esta fecha.
+                  </span>
+                </div>
               </div>
 
               {/* SIMULADOR */}
@@ -606,15 +727,14 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* MODAL: Cobro */}
-      {showPaymentModal && selectedClient && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6">
-            <div className="flex justify-between mb-4"><h3 className="font-bold">Cobro: {selectedClient.name}</h3><button onClick={() => setShowPaymentModal(false)}><X /></button></div>
-            <input type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} className="w-full bg-slate-900 p-4 rounded-xl text-2xl font-bold mb-4 border border-slate-700 text-white" />
-            <button onClick={() => setShowPaymentModal(false)} className="w-full py-3 bg-emerald-500 rounded-lg font-bold">Confirmar</button>
-          </div>
-        </div>
+      {/* MODAL: Cobro & Cuadre */}
+      {activePaymentReceipt && (
+        <RecordPaymentModal
+          receipt={activePaymentReceipt}
+          initialStatus={paymentInitialStatus}
+          onClose={() => setActivePaymentReceipt(null)}
+          onConfirm={handleDashboardPaymentConfirm}
+        />
       )}
 
       {/* MODAL: Renta Moto */}

@@ -18,26 +18,25 @@ const ReceiptController = {
         return res.status(400).json({ error: "La ruta de este día ya está cerrada y cuadradada. No puedes volver a generarla." });
       }
 
-      // 2. Verificar si hay algún recibo PENDING con fecha anterior a parsedDate
+      // 2. Revisión de cobros pendientes anteriores (alerta no bloqueante)
       const pendingBefore = await prisma.scheduledReceipt.findFirst({
         where: {
           date: { lt: parsedDate },
           status: 'PENDING'
         }
       });
+      let warningMessage = null;
       if (pendingBefore) {
         const pendingDateString = pendingBefore.date.toISOString().split('T')[0];
-        return res.status(400).json({ 
-          error: `No se puede generar la ruta. Existen cobros PENDIENTES del día ${pendingDateString}. Debes cuadrarlos o reprogramarlos primero.` 
-        });
+        warningMessage = `Atención: Tienes cobros pendientes del día ${pendingDateString}.`;
       }
 
-      // Obtener todos los préstamos activos excluyendo congelados y castigados
+      // Obtener todos los préstamos activos o en mora
       const activeLoans = await prisma.loan.findMany({
         where: { 
-          status: 'ACTIVE',
+          status: { in: ['ACTIVE', 'MORA'] },
           client: {
-            status: { notIn: ['CONGELADO', 'CASTIGADO', 'INACTIVE'] }
+            status: { notIn: ['CASTIGADO', 'INACTIVE'] }
           }
         },
         include: { client: true }
@@ -273,20 +272,47 @@ const ReceiptController = {
     }
   },
 
-  // Crear recibo manual
+  // Crear recibo manual (o retornar existente para la fecha)
   async createManualReceipt(req, res) {
     const { loanId, date } = req.body;
     try {
-      const loan = await prisma.loan.findUnique({ where: { id: parseInt(loanId) }});
-      const cuota = Number(loan.totalAmount) / loan.installmentsTotal;
+      const parsedDate = new Date(date);
+      const existing = await prisma.scheduledReceipt.findFirst({
+        where: {
+          loanId: parseInt(loanId),
+          date: parsedDate
+        },
+        include: {
+          loan: {
+            include: { client: true }
+          }
+        }
+      });
+
+      if (existing) {
+        return res.json(existing);
+      }
+
+      const loan = await prisma.loan.findUnique({ 
+        where: { id: parseInt(loanId) },
+        include: { client: true }
+      });
+      if (!loan) return res.status(404).json({ error: 'Préstamo no encontrado' });
+
+      const cuota = Number(loan.totalAmount) / (loan.installmentsTotal || 20);
       
       const receipt = await prisma.scheduledReceipt.create({
         data: {
           loanId: parseInt(loanId),
-          date: new Date(date),
+          date: parsedDate,
           expectedAmount: cuota,
           status: 'PENDING',
           isManual: true
+        },
+        include: {
+          loan: {
+            include: { client: true }
+          }
         }
       });
       res.json(receipt);

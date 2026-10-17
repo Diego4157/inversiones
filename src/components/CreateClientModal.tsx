@@ -45,6 +45,7 @@ const CreateClientModal: React.FC<CreateClientModalProps> = ({
   const [frequency, setFrequency] = useState('DAILY');
   const [interestRate, setInterestRate] = useState('20');
   const [installments, setInstallments] = useState('20');
+  const [firstPaymentDate, setFirstPaymentDate] = useState(new Date().toISOString().split('T')[0]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +130,8 @@ const CreateClientModal: React.FC<CreateClientModalProps> = ({
           amount: simAmount,
           installments: simInstallments,
           interestRate: simRate,
-          frequency
+          frequency,
+          firstPaymentDate
         });
       }
 
@@ -428,6 +430,21 @@ const CreateClientModal: React.FC<CreateClientModalProps> = ({
                       required={activateCredit}
                     />
                   </div>
+                </div>
+
+                {/* Fecha del Primer Cobro */}
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 flex items-center justify-between">
+                    <span>📅 Fecha del Primer Cobro (Inicio de Ruta)</span>
+                    <span className="text-[10px] text-emerald-400 font-bold">Generará el cobro automáticamente</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={firstPaymentDate}
+                    onChange={(e) => setFirstPaymentDate(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs font-bold focus:border-emerald-500 focus:outline-none transition-all cursor-pointer"
+                    required={activateCredit}
+                  />
                 </div>
 
                 {/* Simulador */}

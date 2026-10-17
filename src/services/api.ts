@@ -94,7 +94,7 @@ export const loanService = {
     return await res.json();
   },
 
-  async create(loanData: { name?: string; clientId?: number; amount: number; installments: number; interestRate?: number; frequency?: string }) {
+  async create(loanData: { name?: string; clientId?: number; amount: number; installments: number; interestRate?: number; frequency?: string; firstPaymentDate?: string }) {
     const res = await fetch(`${API_URL}/loans`, {
       method: 'POST',
       headers: getHeaders(),

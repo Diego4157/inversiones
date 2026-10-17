@@ -27,7 +27,7 @@ const LoanController = {
 
   // Crear nuevo préstamo
   async createLoan(req, res) {
-    const { name, amount, installments, frequency, interestRate, clientId } = req.body;
+    const { name, amount, installments, frequency, interestRate, clientId, startDate, firstPaymentDate } = req.body;
     console.log(`>> Petición: Crear crédito para [${name || clientId}] por valor de $${amount} al ${interestRate}%`);
     
     try {
@@ -48,13 +48,26 @@ const LoanController = {
             fullName: name || 'Cliente Sin Nombre', 
             documentId: "ID-" + Date.now(),
             phone: "000", 
-            address: "PENDIENTE" 
+            address: "PENDIENTE",
+            status: "ACTIVE"
           }
+        });
+      } else if (client.status !== 'ACTIVE') {
+        // Si el cliente estaba congelado, reactivarlo al crearle nuevo crédito
+        client = await prisma.client.update({
+          where: { id: client.id },
+          data: { status: 'ACTIVE' }
         });
       }
 
+      const firstDateString = (firstPaymentDate || startDate || new Date().toISOString()).split('T')[0];
+      const parsedFirstDate = new Date(`${firstDateString}T00:00:00.000Z`);
+
       const rate = interestRate ? parseFloat(interestRate) : 20;
       const totalAmount = parseFloat(amount) * (1 + (rate / 100));
+      const totalInst = installments ? parseInt(installments) : 20;
+      const cuota = totalAmount / totalInst;
+
       const loan = await prisma.loan.create({
         data: {
           clientId: client.id,
@@ -62,12 +75,33 @@ const LoanController = {
           interestRate: rate,
           totalAmount: totalAmount,
           balance: totalAmount,
-          installmentsTotal: installments ? parseInt(installments) : 20,
+          installmentsTotal: totalInst,
           frequency: frequency || 'DAILY',
-          status: 'ACTIVE'
+          status: 'ACTIVE',
+          startDate: parsedFirstDate
         },
         include: { client: true }
       });
+
+      // Generar automáticamente el primer recibo en la fecha de cobro elegida
+      const existingReceipt = await prisma.scheduledReceipt.findFirst({
+        where: {
+          loanId: loan.id,
+          date: parsedFirstDate
+        }
+      });
+
+      if (!existingReceipt) {
+        await prisma.scheduledReceipt.create({
+          data: {
+            loanId: loan.id,
+            date: parsedFirstDate,
+            expectedAmount: cuota,
+            status: 'PENDING',
+            isManual: false
+          }
+        });
+      }
 
       // Bitácora de Auditoría
       await recordAuditLog({
@@ -81,12 +115,13 @@ const LoanController = {
           totalAmount: totalAmount,
           interestRate: rate,
           installmentsTotal: loan.installmentsTotal,
-          frequency: loan.frequency
+          frequency: loan.frequency,
+          firstPaymentDate: firstDateString
         },
         req
       });
       
-      console.log(">> ¡ÉXITO! Préstamo guardado y auditado correctamente.");
+      console.log(">> ¡ÉXITO! Préstamo guardado, recibo inicial generado y auditado correctamente.");
       res.status(201).json(loan);
     } catch (error) {
       console.error("!! ERROR FATAL AL GUARDAR:", error);
